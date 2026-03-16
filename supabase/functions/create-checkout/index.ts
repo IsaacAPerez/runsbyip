@@ -85,7 +85,7 @@ Deno.serve(async (req: Request) => {
           price_data: {
             currency: "usd",
             product_data: {
-              name: `Wednesday Hoops — ${session.date}`,
+              name: `RunsByIP — ${session.date}`,
               description: `${session.time} at ${session.location}`,
             },
             unit_amount: session.price_cents,
