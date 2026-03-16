@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RunsByIP</title>
+  <title>RunsByIP — Weekly Pickup Basketball in Los Angeles</title>
+  <meta name="description" content="RunsByIP organizes weekly pickup basketball sessions in Los Angeles. RSVP and pay online — show up and hoop.">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -23,7 +24,7 @@
 
   <!-- Header -->
   <header class="border-b border-gray-800/50">
-    <div class="max-w-2xl mx-auto px-4 py-5 flex items-center justify-between">
+    <div class="max-w-3xl mx-auto px-4 py-5 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <span class="text-2xl">🏀</span>
         <div>
@@ -31,28 +32,75 @@
           <p class="text-xs text-gray-500 tracking-wide uppercase">Weekly Pickup Runs</p>
         </div>
       </div>
-      <span class="text-xs text-gray-600 hidden sm:block">Every Wednesday</span>
+      <a href="#next-session" class="text-sm text-orange-400 hover:text-orange-300 font-medium transition-colors hidden sm:block">Next Session &darr;</a>
     </div>
   </header>
 
-  <main class="max-w-2xl mx-auto px-4 py-8">
+  <!-- Hero Section -->
+  <section class="border-b border-gray-800/30">
+    <div class="max-w-3xl mx-auto px-4 py-16 sm:py-20 text-center">
+      <h2 class="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4 leading-tight">
+        Pickup Basketball.<br>Every Wednesday.
+      </h2>
+      <p class="text-lg text-gray-400 max-w-lg mx-auto mb-8">
+        RunsByIP organizes weekly pickup basketball sessions in Los Angeles. RSVP online, pay $10, and show up ready to hoop.
+      </p>
+      <a href="#next-session" class="inline-block bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-3.5 px-8 rounded-xl transition-all shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 text-lg">
+        See This Week's Session
+      </a>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="border-b border-gray-800/30">
+    <div class="max-w-3xl mx-auto px-4 py-12">
+      <h3 class="font-semibold text-sm uppercase tracking-wider text-gray-500 mb-6 text-center">How It Works</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div class="text-center">
+          <div class="w-12 h-12 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto mb-3">
+            <span class="text-orange-400 font-bold">1</span>
+          </div>
+          <h4 class="font-semibold mb-1">RSVP</h4>
+          <p class="text-sm text-gray-400">Enter your name and email to reserve your spot for the week.</p>
+        </div>
+        <div class="text-center">
+          <div class="w-12 h-12 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto mb-3">
+            <span class="text-orange-400 font-bold">2</span>
+          </div>
+          <h4 class="font-semibold mb-1">Pay $10</h4>
+          <p class="text-sm text-gray-400">Secure checkout powered by Stripe. Covers your share of the gym.</p>
+        </div>
+        <div class="text-center">
+          <div class="w-12 h-12 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto mb-3">
+            <span class="text-orange-400 font-bold">3</span>
+          </div>
+          <h4 class="font-semibold mb-1">Show Up & Hoop</h4>
+          <p class="text-sm text-gray-400">You're locked in. Show up on Wednesday and get your runs in.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <main class="max-w-2xl mx-auto px-4 py-10" id="next-session">
+
+    <h3 class="font-semibold text-sm uppercase tracking-wider text-gray-500 mb-5 text-center">Next Session</h3>
 
     <!-- Loading State -->
-    <div id="loading" class="text-center py-20">
+    <div id="loading" class="text-center py-16">
       <div class="spinner mx-auto mb-4" style="border-color: rgba(255,255,255,0.1); border-top-color: #f97316; width: 36px; height: 36px; border-width: 3px;"></div>
       <p class="text-gray-500 text-sm">Loading session...</p>
     </div>
 
     <!-- No Session State -->
-    <div id="no-session" class="hidden text-center py-20">
-      <div class="text-7xl mb-6">🏀</div>
+    <div id="no-session" class="hidden text-center py-16">
+      <div class="text-6xl mb-5">🏀</div>
       <h2 class="text-2xl font-bold mb-2">No Upcoming Session</h2>
-      <p class="text-gray-400 max-w-sm mx-auto">Check back soon — the next Wednesday session will be posted here.</p>
+      <p class="text-gray-400 max-w-sm mx-auto">Check back soon — the next session will be posted here.</p>
     </div>
 
     <!-- Cancelled Session State -->
-    <div id="cancelled-session" class="hidden text-center py-20">
-      <div class="text-7xl mb-6">😔</div>
+    <div id="cancelled-session" class="hidden text-center py-16">
+      <div class="text-6xl mb-5">😔</div>
       <h2 class="text-2xl font-bold mb-2">Session Cancelled</h2>
       <p class="text-gray-400">This week's session has been cancelled. Check back next week!</p>
     </div>
@@ -121,38 +169,31 @@
         <p class="text-xl font-bold text-orange-400">Session is full!</p>
         <p class="text-gray-400 mt-1">All spots have been claimed. See you next week!</p>
       </div>
-
-      <!-- How It Works -->
-      <div class="bg-gray-900/40 rounded-2xl border border-gray-800/50 p-6">
-        <h3 class="font-semibold text-sm uppercase tracking-wider text-gray-500 mb-4">How It Works</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="text-center">
-            <div class="w-10 h-10 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto mb-2">
-              <span class="text-orange-400 font-bold text-sm">1</span>
-            </div>
-            <p class="text-sm text-gray-400">RSVP with your name & email</p>
-          </div>
-          <div class="text-center">
-            <div class="w-10 h-10 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto mb-2">
-              <span class="text-orange-400 font-bold text-sm">2</span>
-            </div>
-            <p class="text-sm text-gray-400">Pay $10 securely via Stripe</p>
-          </div>
-          <div class="text-center">
-            <div class="w-10 h-10 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto mb-2">
-              <span class="text-orange-400 font-bold text-sm">3</span>
-            </div>
-            <p class="text-sm text-gray-400">Show up & hoop!</p>
-          </div>
-        </div>
-      </div>
     </div>
   </main>
 
+  <!-- About Section -->
+  <section class="border-t border-gray-800/30">
+    <div class="max-w-3xl mx-auto px-4 py-12 text-center">
+      <h3 class="text-xl font-bold mb-3">About RunsByIP</h3>
+      <p class="text-gray-400 max-w-xl mx-auto leading-relaxed">
+        RunsByIP is a weekly pickup basketball community in Los Angeles, organized by Isaac Perez. Every Wednesday, we book a gym and run 5v5 games. Payment covers your share of the gym rental — no hassle, no chasing people down. Just RSVP, pay, and show up ready to play.
+      </p>
+    </div>
+  </section>
+
+  <!-- Contact -->
+  <section class="border-t border-gray-800/30">
+    <div class="max-w-3xl mx-auto px-4 py-10 text-center">
+      <h3 class="font-semibold text-sm uppercase tracking-wider text-gray-500 mb-3">Questions?</h3>
+      <p class="text-gray-400 text-sm">Reach out on Instagram or email <span class="text-white">hello@runsbyip.com</span></p>
+    </div>
+  </section>
+
   <!-- Footer -->
-  <footer class="border-t border-gray-800/30 mt-12">
-    <div class="max-w-2xl mx-auto px-4 py-6 flex items-center justify-between text-xs text-gray-600">
-      <span>RunsByIP</span>
+  <footer class="border-t border-gray-800/30">
+    <div class="max-w-3xl mx-auto px-4 py-6 flex items-center justify-between text-xs text-gray-600">
+      <span>&copy; 2026 RunsByIP</span>
       <a href="admin.html" class="hover:text-gray-400 transition-colors">Admin</a>
     </div>
   </footer>
