@@ -58,13 +58,17 @@ function showView(viewId) {
 // Parse session date + time into a Date object
 function getSessionDateTime() {
   if (!currentSession) return null;
-  const timeStr = currentSession.time; // e.g. "7:00 PM"
+  const timeStr = currentSession.time; // e.g. "7:00 PM" or "7:00PM"
   const dateStr = currentSession.date; // e.g. "2026-03-18"
-  const [time, period] = timeStr.split(' ');
-  let [hours, minutes] = time.split(':').map(Number);
+  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!match) return null;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const period = match[3].toUpperCase();
   if (period === 'PM' && hours !== 12) hours += 12;
   if (period === 'AM' && hours === 12) hours = 0;
-  return new Date(`${dateStr}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day, hours, minutes, 0);
 }
 
 // Countdown timer
@@ -101,7 +105,7 @@ async function loadWeather() {
   try {
     const date = currentSession.date;
     const res = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode&temperature_unit=fahrenheit&timezone=America/Los_Angeles&start_date=${date}&end_date=${date}`
+      `https://api.open-meteo.com/v1/forecast?latitude=34.05&longitude=-118.24&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&temperature_unit=fahrenheit&timezone=America/Los_Angeles&start_date=${date}&end_date=${date}`
     );
     const data = await res.json();
     if (!data.daily || !data.daily.time || data.daily.time.length === 0) return;
@@ -109,7 +113,7 @@ async function loadWeather() {
     const high = Math.round(data.daily.temperature_2m_max[0]);
     const low = Math.round(data.daily.temperature_2m_min[0]);
     const rainChance = data.daily.precipitation_probability_max[0];
-    const code = data.daily.weathercode[0];
+    const code = data.daily.weather_code[0];
     const { icon, desc } = getWeatherInfo(code);
 
     document.getElementById('weather-icon').textContent = icon;
