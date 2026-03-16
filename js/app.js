@@ -367,6 +367,15 @@ function updateRSVPDisplay(rsvps, waitlisted) {
     checkoutSection.classList.remove('hidden');
   }
 
+  // Store for team randomizer
+  currentRSVPs = rsvps;
+  const teamRandomizer = document.getElementById('team-randomizer');
+  if (count >= 4) {
+    teamRandomizer.classList.remove('hidden');
+  } else {
+    teamRandomizer.classList.add('hidden');
+  }
+
   playerList.innerHTML = '';
   rsvps.forEach((rsvp, i) => {
     const div = document.createElement('div');
@@ -442,6 +451,60 @@ function escapeHtml(str) {
   div.textContent = str;
   return div.innerHTML;
 }
+
+// ---- Share button ----
+document.getElementById('share-btn').addEventListener('click', async () => {
+  const url = 'https://runsbyip.com';
+  const text = 'Pickup basketball this Wednesday — RSVP and lock in your spot!';
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'RunsByIP', text, url });
+    } catch (e) { /* user cancelled */ }
+  } else {
+    await navigator.clipboard.writeText(url);
+    showToast('Link copied!', 'success');
+  }
+});
+
+// ---- Team Randomizer ----
+let currentRSVPs = [];
+
+document.getElementById('randomize-btn').addEventListener('click', () => {
+  if (currentRSVPs.length < 2) return;
+
+  const shuffled = [...currentRSVPs].sort(() => Math.random() - 0.5);
+  const mid = Math.ceil(shuffled.length / 2);
+  const team1 = shuffled.slice(0, mid);
+  const team2 = shuffled.slice(mid);
+
+  const teamsDisplay = document.getElementById('teams-display');
+  teamsDisplay.classList.remove('hidden');
+
+  document.getElementById('team-1').innerHTML = team1
+    .map(r => `<p class="text-sm text-orange-300">${escapeHtml(r.player_name)}</p>`).join('');
+  document.getElementById('team-2').innerHTML = team2
+    .map(r => `<p class="text-sm text-blue-300">${escapeHtml(r.player_name)}</p>`).join('');
+});
+
+// ---- PWA Install ----
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('install-banner').classList.remove('hidden');
+});
+
+document.getElementById('install-btn').addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  if (outcome === 'accepted') {
+    document.getElementById('install-banner').classList.add('hidden');
+  }
+  deferredPrompt = null;
+});
 
 // Initialize
 loadSession().catch(err => {

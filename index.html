@@ -8,6 +8,15 @@
   <meta name="theme-color" content="#030712">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <!-- OG / Social -->
+  <meta property="og:title" content="RunsByIP — Weekly Pickup Basketball">
+  <meta property="og:description" content="RSVP and pay $10 to lock in your spot. Every Wednesday in LA.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://runsbyip.com">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="RunsByIP — Weekly Pickup Basketball">
+  <meta name="twitter:description" content="RSVP and pay $10 to lock in your spot. Every Wednesday in LA.">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -33,7 +42,10 @@
         <span class="text-xl">🏀</span>
         <h1 class="text-lg font-bold tracking-tight">RunsByIP</h1>
       </div>
-      <span class="text-xs text-gray-600 hidden sm:block">Every Wednesday</span>
+      <button id="share-btn" class="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white active:text-white py-2 px-3 -mr-3 rounded-lg transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+        Share
+      </button>
     </div>
   </header>
 
@@ -186,11 +198,40 @@
         </div>
         <p id="rsvp-message" class="text-sm text-gray-400"></p>
         <div id="player-list" class="mt-4 space-y-2.5"></div>
+        <!-- Team Randomizer -->
+        <div id="team-randomizer" class="hidden mt-4 pt-4 border-t border-gray-800">
+          <button id="randomize-btn" class="w-full flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-sm font-semibold text-gray-300 py-3 rounded-xl transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Randomize Teams
+          </button>
+          <div id="teams-display" class="hidden mt-4 grid grid-cols-2 gap-3">
+            <div>
+              <h5 class="text-xs font-bold uppercase tracking-wider text-orange-400 mb-2">Team 1</h5>
+              <div id="team-1" class="space-y-1.5"></div>
+            </div>
+            <div>
+              <h5 class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-2">Team 2</h5>
+              <div id="team-2" class="space-y-1.5"></div>
+            </div>
+          </div>
+        </div>
         <!-- Waitlist -->
         <div id="waitlist-section" class="hidden mt-4 pt-4 border-t border-gray-800">
           <h4 class="text-sm font-semibold text-gray-400 mb-2">Waitlist</h4>
           <div id="waitlist-list" class="space-y-2"></div>
         </div>
+      </div>
+
+      <!-- Install App Banner -->
+      <div id="install-banner" class="hidden bg-gray-900/80 rounded-2xl border border-gray-800 p-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">🏀</span>
+          <div>
+            <p class="font-semibold text-sm">Add RunsByIP to Home Screen</p>
+            <p class="text-xs text-gray-500">Quick access every week</p>
+          </div>
+        </div>
+        <button id="install-btn" class="bg-orange-500 active:bg-orange-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors shrink-0">Install</button>
       </div>
 
       <!-- Checkout (unified: name + email + payment) -->
@@ -315,6 +356,6 @@
   <div id="toast" class="toast"></div>
 
   <script src="js/config.js"></script>
-  <script src="js/app.js?v=4"></script>
+  <script src="js/app.js?v=5"></script>
 </body>
 </html>
