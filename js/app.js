@@ -17,8 +17,6 @@ const rsvpProgress = document.getElementById('rsvp-progress');
 const rsvpMessage = document.getElementById('rsvp-message');
 const playerList = document.getElementById('player-list');
 const checkoutSection = document.getElementById('checkout-section');
-const paymentPlaceholder = document.getElementById('payment-placeholder');
-const paymentLoading = document.getElementById('payment-loading');
 const paymentArea = document.getElementById('payment-area');
 const payBtn = document.getElementById('pay-btn');
 const paymentError = document.getElementById('payment-error');
@@ -36,16 +34,30 @@ const emailInput = document.getElementById('player-email');
 let currentSession = null;
 let elements = null;
 let countdownInterval = null;
-let paymentReady = false;
+
+// Stripe appearance config
+const stripeAppearance = {
+  theme: 'night',
+  variables: {
+    colorPrimary: '#f97316',
+    colorBackground: '#1f2937',
+    colorText: '#ffffff',
+    colorDanger: '#ef4444',
+    borderRadius: '12px',
+    fontFamily: 'Inter, system-ui, sans-serif',
+    spacingUnit: '4px',
+  },
+  rules: {
+    '.Input': { border: '1px solid #374151', backgroundColor: '#1f2937', padding: '12px' },
+    '.Input:focus': { border: '1px solid #f97316', boxShadow: '0 0 0 2px rgba(249, 115, 22, 0.2)' },
+    '.Label': { color: '#9ca3af', marginBottom: '6px' },
+  },
+};
 
 // Format date nicely
 function formatDate(dateStr) {
   const date = new Date(dateStr + 'T00:00:00');
-  return date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  });
+  return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
 // Show a specific view, hide others
@@ -60,28 +72,24 @@ function showView(viewId) {
 // Parse session date + time into a Date object
 function getSessionDateTime() {
   if (!currentSession) return null;
-  const timeStr = currentSession.time;
-  const dateStr = currentSession.date;
-  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  const match = currentSession.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
   if (!match) return null;
   let hours = parseInt(match[1], 10);
   const minutes = parseInt(match[2], 10);
   const period = match[3].toUpperCase();
   if (period === 'PM' && hours !== 12) hours += 12;
   if (period === 'AM' && hours === 12) hours = 0;
-  const [year, month, day] = dateStr.split('-').map(Number);
+  const [year, month, day] = currentSession.date.split('-').map(Number);
   return new Date(year, month - 1, day, hours, minutes, 0);
 }
 
 // Countdown timer
 function startCountdown() {
   if (countdownInterval) clearInterval(countdownInterval);
-
   function update() {
     const target = getSessionDateTime();
     if (!target) return;
     const diff = target - new Date();
-
     if (diff <= 0) {
       document.getElementById('cd-days').textContent = '0';
       document.getElementById('cd-hours').textContent = '0';
@@ -90,18 +98,16 @@ function startCountdown() {
       clearInterval(countdownInterval);
       return;
     }
-
     document.getElementById('cd-days').textContent = Math.floor(diff / 86400000);
     document.getElementById('cd-hours').textContent = Math.floor((diff % 86400000) / 3600000);
     document.getElementById('cd-mins').textContent = Math.floor((diff % 3600000) / 60000);
     document.getElementById('cd-secs').textContent = Math.floor((diff % 60000) / 1000);
   }
-
   update();
   countdownInterval = setInterval(update, 1000);
 }
 
-// Weather widget — Open-Meteo (free, no API key)
+// Weather widget
 async function loadWeather() {
   if (!currentSession) return;
   try {
@@ -111,20 +117,17 @@ async function loadWeather() {
     );
     const data = await res.json();
     if (!data.daily || !data.daily.time || data.daily.time.length === 0) return;
-
     const high = Math.round(data.daily.temperature_2m_max[0]);
     const low = Math.round(data.daily.temperature_2m_min[0]);
     const rainChance = data.daily.precipitation_probability_max[0];
     const code = data.daily.weather_code[0];
     const { icon, desc } = getWeatherInfo(code);
-
     document.getElementById('weather-icon').textContent = icon;
     document.getElementById('weather-temp').textContent = high;
     document.getElementById('weather-desc').textContent = desc;
     document.getElementById('weather-high').textContent = high;
     document.getElementById('weather-low').textContent = low;
     document.getElementById('weather-rain').textContent = rainChance > 0 ? `${rainChance}% rain` : '';
-
     weatherWidget.classList.remove('hidden');
   } catch (err) {
     console.error('Weather fetch error:', err);
@@ -162,7 +165,6 @@ function renderCourtDots(count, max) {
   }
 }
 
-// Toast helper
 function showToast(message, type) {
   const toast = document.getElementById('toast');
   toast.textContent = message;
@@ -170,152 +172,109 @@ function showToast(message, type) {
   setTimeout(() => { toast.classList.remove('show'); }, 3000);
 }
 
-// Simple email validation
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-// Auto-load Stripe payment elements when name + email are valid
-let loadingPayment = false;
-let debounceTimer = null;
+// Mount Stripe Elements immediately (deferred intent — no client_secret needed)
+function mountPaymentForm() {
+  elements = stripe.elements({
+    mode: 'payment',
+    amount: currentSession.price_cents,
+    currency: 'usd',
+    appearance: stripeAppearance,
+  });
 
-function checkAndLoadPayment() {
-  if (debounceTimer) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(async () => {
-    const name = nameInput.value.trim();
-    const email = emailInput.value.trim();
+  // Card / payment method form
+  const paymentElement = elements.create('payment', { layout: 'tabs' });
+  paymentElement.mount('#payment-element');
 
-    if (!name || !isValidEmail(email) || elements || loadingPayment) return;
+  // Express Checkout (Apple Pay / Google Pay)
+  const expressElement = elements.create('expressCheckout', {
+    buttonType: { applePay: 'plain', googlePay: 'plain' },
+    buttonHeight: 48,
+  });
 
-    loadingPayment = true;
-    paymentPlaceholder.classList.add('hidden');
-    paymentLoading.classList.remove('hidden');
-    paymentError.classList.add('hidden');
-
-    try {
-      const response = await db.functions.invoke('create-checkout', {
-        body: {
-          session_id: currentSession.id,
-          player_name: name,
-          player_email: email,
-        },
-      });
-
-      if (response.error) throw response.error;
-
-      const { client_secret } = response.data;
-      if (!client_secret) throw new Error('No client secret returned');
-
-      // Create Stripe Elements with dark theme
-      elements = stripe.elements({
-        clientSecret: client_secret,
-        appearance: {
-          theme: 'night',
-          variables: {
-            colorPrimary: '#f97316',
-            colorBackground: '#1f2937',
-            colorText: '#ffffff',
-            colorDanger: '#ef4444',
-            borderRadius: '12px',
-            fontFamily: 'Inter, system-ui, sans-serif',
-            spacingUnit: '4px',
-          },
-          rules: {
-            '.Input': {
-              border: '1px solid #374151',
-              backgroundColor: '#1f2937',
-              padding: '12px',
-            },
-            '.Input:focus': {
-              border: '1px solid #f97316',
-              boxShadow: '0 0 0 2px rgba(249, 115, 22, 0.2)',
-            },
-            '.Label': {
-              color: '#9ca3af',
-              marginBottom: '6px',
-            },
-          },
-        },
-      });
-
-      // Mount Payment Element
-      const paymentElement = elements.create('payment', { layout: 'tabs' });
-      paymentElement.mount('#payment-element');
-
-      paymentElement.on('ready', () => {
-        paymentReady = true;
-        payBtn.disabled = false;
-      });
-
-      // Mount Express Checkout (Apple Pay / Google Pay)
-      const expressElement = elements.create('expressCheckout', {
-        buttonType: { applePay: 'plain', googlePay: 'plain' },
-        buttonHeight: 48,
-      });
-
-      expressElement.on('ready', ({ availablePaymentMethods }) => {
-        if (availablePaymentMethods) {
-          document.getElementById('express-divider').classList.remove('hidden');
-        }
-      });
-
-      expressElement.on('confirm', async () => {
-        const { error } = await stripe.confirmPayment({
-          elements,
-          confirmParams: {
-            return_url: window.location.origin + '/success.html',
-          },
-        });
-        if (error) {
-          paymentError.textContent = error.message;
-          paymentError.classList.remove('hidden');
-        }
-      });
-
-      expressElement.mount('#express-checkout-element');
-
-      // Show payment area
-      paymentLoading.classList.add('hidden');
-      paymentArea.classList.remove('hidden');
-
-    } catch (err) {
-      console.error('Checkout error:', err);
-      paymentLoading.classList.add('hidden');
-      paymentPlaceholder.classList.remove('hidden');
-      paymentError.textContent = err.message || 'Something went wrong. Please try again.';
-      paymentError.classList.remove('hidden');
-      loadingPayment = false;
+  expressElement.on('ready', ({ availablePaymentMethods }) => {
+    if (availablePaymentMethods) {
+      document.getElementById('express-divider').classList.remove('hidden');
     }
-  }, 500);
+  });
+
+  expressElement.on('confirm', async () => {
+    await handlePayment();
+  });
+
+  expressElement.mount('#express-checkout-element');
+  paymentArea.classList.remove('hidden');
 }
 
-nameInput.addEventListener('input', checkAndLoadPayment);
-emailInput.addEventListener('input', checkAndLoadPayment);
+// Handle payment — validate inputs, create PaymentIntent, confirm
+async function handlePayment() {
+  const name = nameInput.value.trim();
+  const email = emailInput.value.trim();
 
-// Pay button — confirm payment
-payBtn.addEventListener('click', async () => {
-  if (!elements || !paymentReady) return;
+  if (!name || !isValidEmail(email)) {
+    paymentError.textContent = 'Please enter your name and a valid email.';
+    paymentError.classList.remove('hidden');
+    return;
+  }
 
   payBtn.disabled = true;
   payBtn.innerHTML = '<span class="spinner"></span>';
   paymentError.classList.add('hidden');
 
-  const { error } = await stripe.confirmPayment({
-    elements,
-    confirmParams: {
-      return_url: window.location.origin + '/success.html',
-    },
-  });
+  try {
+    // Validate the payment form first
+    const { error: submitError } = await elements.submit();
+    if (submitError) {
+      paymentError.textContent = submitError.message;
+      paymentError.classList.remove('hidden');
+      payBtn.disabled = false;
+      payBtn.textContent = `RSVP & Pay $${(currentSession.price_cents / 100).toFixed(0)}`;
+      return;
+    }
 
-  // Only reaches here if there's an error (otherwise redirects)
-  if (error) {
-    paymentError.textContent = error.message;
+    // Create PaymentIntent + RSVP record on the server
+    const response = await db.functions.invoke('create-checkout', {
+      body: {
+        session_id: currentSession.id,
+        player_name: name,
+        player_email: email,
+      },
+    });
+
+    if (response.error) throw response.error;
+
+    const { client_secret } = response.data;
+    if (!client_secret) throw new Error('No client secret returned');
+
+    // Confirm the payment with the server-created intent
+    const { error } = await stripe.confirmPayment({
+      elements,
+      clientSecret: client_secret,
+      confirmParams: {
+        return_url: window.location.origin + '/success.html',
+      },
+    });
+
+    // Only reaches here if there's an error (otherwise redirects)
+    if (error) {
+      paymentError.textContent = error.message;
+      paymentError.classList.remove('hidden');
+    }
+  } catch (err) {
+    console.error('Payment error:', err);
+    paymentError.textContent = err.message || 'Something went wrong. Please try again.';
     paymentError.classList.remove('hidden');
   }
 
   payBtn.disabled = false;
   payBtn.textContent = `RSVP & Pay $${(currentSession.price_cents / 100).toFixed(0)}`;
-});
+}
+
+// Pay button
+payBtn.addEventListener('click', handlePayment);
 
 // Load the next upcoming session
 async function loadSession() {
@@ -347,13 +306,14 @@ async function loadSession() {
   }
 
   showView('session-card');
+  mountPaymentForm();
   startCountdown();
   loadWeather();
   await loadRSVPs();
   subscribeToRSVPs();
 }
 
-// Load RSVPs for the current session
+// Load RSVPs
 async function loadRSVPs() {
   if (!currentSession) return;
 
@@ -368,7 +328,6 @@ async function loadRSVPs() {
     return;
   }
 
-  // Load waitlisted players
   const { data: waitlisted } = await db
     .from('public_rsvps')
     .select('*')
@@ -378,7 +337,7 @@ async function loadRSVPs() {
   updateRSVPDisplay(rsvps || [], waitlisted || []);
 }
 
-// Update the RSVP count, progress bar, court dots, and player lists
+// Update RSVP display
 function updateRSVPDisplay(rsvps, waitlisted) {
   const count = rsvps.length;
   const max = currentSession.max_players;
@@ -387,7 +346,6 @@ function updateRSVPDisplay(rsvps, waitlisted) {
 
   rsvpCount.textContent = `${count}/${max}`;
   rsvpProgress.style.width = `${pct}%`;
-
   renderCourtDots(count, max);
 
   if (count >= max) {
@@ -409,7 +367,6 @@ function updateRSVPDisplay(rsvps, waitlisted) {
     checkoutSection.classList.remove('hidden');
   }
 
-  // Confirmed players list
   playerList.innerHTML = '';
   rsvps.forEach((rsvp, i) => {
     const div = document.createElement('div');
@@ -423,7 +380,6 @@ function updateRSVPDisplay(rsvps, waitlisted) {
     playerList.appendChild(div);
   });
 
-  // Waitlisted players
   if (waitlisted && waitlisted.length > 0) {
     waitlistSection.classList.remove('hidden');
     waitlistList.innerHTML = '';
@@ -443,27 +399,20 @@ function updateRSVPDisplay(rsvps, waitlisted) {
   }
 }
 
-// Subscribe to real-time RSVP changes
+// Real-time RSVP subscription
 function subscribeToRSVPs() {
   if (!currentSession) return;
-
-  db
-    .channel('rsvps-changes')
+  db.channel('rsvps-changes')
     .on('postgres_changes', {
-      event: '*',
-      schema: 'public',
-      table: 'rsvps',
+      event: '*', schema: 'public', table: 'rsvps',
       filter: `session_id=eq.${currentSession.id}`,
-    }, () => {
-      loadRSVPs();
-    })
+    }, () => { loadRSVPs(); })
     .subscribe();
 }
 
-// Waitlist form handler
+// Waitlist form
 waitlistForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-
   const name = document.getElementById('wl-name').value.trim();
   const email = document.getElementById('wl-email').value.trim();
   if (!name || !email) return;
@@ -473,15 +422,9 @@ waitlistForm.addEventListener('submit', async (e) => {
 
   try {
     const response = await db.functions.invoke('join-waitlist', {
-      body: {
-        session_id: currentSession.id,
-        player_name: name,
-        player_email: email,
-      },
+      body: { session_id: currentSession.id, player_name: name, player_email: email },
     });
-
     if (response.error) throw response.error;
-
     showToast("You're on the waitlist!", 'success');
     waitlistForm.reset();
     await loadRSVPs();

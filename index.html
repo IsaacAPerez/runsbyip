@@ -209,27 +209,19 @@
               class="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition">
           </div>
         </div>
-        <!-- Payment area -->
-        <div class="mt-5">
-          <div id="payment-placeholder" class="text-center py-5 text-gray-600 text-sm border border-dashed border-gray-800 rounded-xl">
-            Enter your name & email to see payment options
+        <!-- Payment area (mounts immediately) -->
+        <div id="payment-area" class="mt-5 hidden">
+          <div id="express-checkout-element" class="mb-4"></div>
+          <div id="express-divider" class="hidden flex items-center gap-3 mb-5">
+            <div class="flex-1 border-t border-gray-700"></div>
+            <span class="text-sm text-gray-500">Or pay with card</span>
+            <div class="flex-1 border-t border-gray-700"></div>
           </div>
-          <div id="payment-loading" class="hidden text-center py-5">
-            <span class="spinner"></span>
-          </div>
-          <div id="payment-area" class="hidden">
-            <div id="express-checkout-element" class="mb-4"></div>
-            <div id="express-divider" class="hidden flex items-center gap-3 mb-5">
-              <div class="flex-1 border-t border-gray-700"></div>
-              <span class="text-sm text-gray-500">Or pay with card</span>
-              <div class="flex-1 border-t border-gray-700"></div>
-            </div>
-            <div id="payment-element" class="mb-4"></div>
-          </div>
+          <div id="payment-element" class="mb-4"></div>
         </div>
         <p id="payment-error" class="text-red-400 text-sm mt-4 hidden"></p>
-        <button id="pay-btn" disabled
-          class="w-full mt-5 bg-gradient-to-r from-orange-500 to-orange-600 active:from-orange-700 active:to-orange-800 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-orange-500/20 disabled:shadow-none text-lg">
+        <button id="pay-btn"
+          class="w-full mt-5 bg-gradient-to-r from-orange-500 to-orange-600 active:from-orange-700 active:to-orange-800 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-orange-500/20 text-lg">
           RSVP & Pay $10
         </button>
       </div>
@@ -297,6 +289,6 @@
   <div id="toast" class="toast"></div>
 
   <script src="js/config.js"></script>
-  <script src="js/app.js?v=2"></script>
+  <script src="js/app.js?v=3"></script>
 </body>
 </html>
