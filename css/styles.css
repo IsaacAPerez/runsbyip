@@ -1,0 +1,66 @@
+/* Progress bar animation */
+.progress-fill {
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Loading spinner */
+.spinner {
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #f97316;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Subtle background texture */
+body {
+  background-image: radial-gradient(circle at 50% 0%, rgba(249, 115, 22, 0.04) 0%, transparent 50%);
+}
+
+/* Player list items fade in */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.player-item {
+  animation: fadeInUp 0.3s ease forwards;
+}
+
+/* Toast notification */
+.toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  color: #fff;
+  font-weight: 500;
+  font-size: 0.875rem;
+  z-index: 50;
+  transform: translateY(100%);
+  opacity: 0;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(8px);
+}
+.toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+.toast-success { background-color: rgba(22, 163, 74, 0.9); }
+.toast-error { background-color: rgba(220, 38, 38, 0.9); }
+
+/* Input focus glow */
+input:focus {
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+}
