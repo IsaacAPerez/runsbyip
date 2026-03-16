@@ -127,9 +127,27 @@ function buildSessionCard(session, rsvps) {
       </div>
       <div class="flex items-center gap-2">
         <span class="px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[session.status]}">${session.status}</span>
-        <span class="text-sm text-gray-400">${paidRsvps.length}/${session.min_players}</span>
+        <span class="text-sm text-gray-400">${paidRsvps.length}/${session.max_players}</span>
       </div>
     </div>
+
+    ${session.status !== 'cancelled' ? `
+    <div class="mb-4">
+      <button onclick="toggleDrop('${session.id}', ${!session.payments_open})"
+        class="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-base transition-colors ${session.payments_open
+          ? 'bg-red-600 active:bg-red-700 text-white'
+          : 'bg-green-600 active:bg-green-700 text-white'
+        }">
+        ${session.payments_open
+          ? '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg> Lock Payments'
+          : '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg> DROP IT \u2014 Open Payments'
+        }
+      </button>
+      <p class="text-xs text-center mt-1.5 ${session.payments_open ? 'text-green-400' : 'text-gray-600'}">
+        ${session.payments_open ? 'Payments are LIVE' : 'Payments locked \u2014 players can see the session but can\u2019t pay yet'}
+      </p>
+    </div>
+    ` : ''}
 
     ${rsvps.length > 0 ? `
       <div class="border-t border-gray-800 pt-4">
@@ -243,6 +261,22 @@ async function markCash(rsvpId) {
   }
 
   showToast('Marked as cash');
+  loadSessions();
+}
+
+// Toggle payments open/closed (shock drop)
+async function toggleDrop(sessionId, open) {
+  const { error } = await db
+    .from('sessions')
+    .update({ payments_open: open })
+    .eq('id', sessionId);
+
+  if (error) {
+    showToast('Failed to toggle payments', 'error');
+    return;
+  }
+
+  showToast(open ? 'PAYMENTS ARE LIVE!' : 'Payments locked', open ? 'success' : 'error');
   loadSessions();
 }
 

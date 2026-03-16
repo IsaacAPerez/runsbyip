@@ -21,6 +21,7 @@ const paymentArea = document.getElementById('payment-area');
 const payBtn = document.getElementById('pay-btn');
 const paymentError = document.getElementById('payment-error');
 const sessionFullEl = document.getElementById('session-full');
+const checkoutLocked = document.getElementById('checkout-locked');
 const courtDots = document.getElementById('court-dots');
 const waitlistFormSection = document.getElementById('waitlist-form-section');
 const waitlistForm = document.getElementById('waitlist-form');
@@ -306,11 +307,38 @@ async function loadSession() {
   }
 
   showView('session-card');
-  mountPaymentForm();
+  updatePaymentsState();
   startCountdown();
   loadWeather();
   await loadRSVPs();
   subscribeToRSVPs();
+  subscribeToSession();
+}
+
+// Show/hide checkout based on payments_open flag
+function updatePaymentsState() {
+  if (currentSession.payments_open) {
+    checkoutLocked.classList.add('hidden');
+    checkoutSection.classList.remove('hidden');
+    if (!elements) mountPaymentForm();
+  } else {
+    checkoutLocked.classList.remove('hidden');
+    checkoutSection.classList.add('hidden');
+  }
+}
+
+// Real-time session subscription (for shock drops)
+function subscribeToSession() {
+  if (!currentSession) return;
+  db.channel('session-changes')
+    .on('postgres_changes', {
+      event: 'UPDATE', schema: 'public', table: 'sessions',
+      filter: `id=eq.${currentSession.id}`,
+    }, (payload) => {
+      currentSession = payload.new;
+      updatePaymentsState();
+    })
+    .subscribe();
 }
 
 // Load RSVPs
@@ -351,6 +379,7 @@ function updateRSVPDisplay(rsvps, waitlisted) {
   if (count >= max) {
     rsvpMessage.textContent = 'Session is full!';
     checkoutSection.classList.add('hidden');
+    checkoutLocked.classList.add('hidden');
     sessionFullEl.classList.add('hidden');
     waitlistFormSection.classList.remove('hidden');
     rsvpProgress.className = 'bg-gradient-to-r from-orange-500 to-orange-400 h-3.5 rounded-full progress-fill';
@@ -358,13 +387,13 @@ function updateRSVPDisplay(rsvps, waitlisted) {
     rsvpMessage.textContent = `Session confirmed! ${max - count} spot${max - count !== 1 ? 's' : ''} left.`;
     rsvpProgress.className = 'bg-gradient-to-r from-green-500 to-green-400 h-3.5 rounded-full progress-fill';
     waitlistFormSection.classList.add('hidden');
-    checkoutSection.classList.remove('hidden');
+    updatePaymentsState();
   } else {
     const needed = min - count;
     rsvpMessage.textContent = `${needed} more player${needed !== 1 ? 's' : ''} needed to confirm!`;
     rsvpProgress.className = 'bg-gradient-to-r from-orange-500 to-orange-400 h-3.5 rounded-full progress-fill';
     waitlistFormSection.classList.add('hidden');
-    checkoutSection.classList.remove('hidden');
+    updatePaymentsState();
   }
 
   // Store for team randomizer

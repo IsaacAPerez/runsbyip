@@ -234,8 +234,22 @@
         <button id="install-btn" class="bg-orange-500 active:bg-orange-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors shrink-0">Install</button>
       </div>
 
-      <!-- Checkout (unified: name + email + payment) -->
-      <div id="checkout-section" class="bg-gray-900/80 rounded-2xl border border-gray-800 p-5 sm:p-6">
+      <!-- Checkout: Locked State -->
+      <div id="checkout-locked" class="hidden bg-gray-900/80 rounded-2xl border border-gray-800 p-5 sm:p-6 text-center">
+        <div class="text-4xl mb-3">🔒</div>
+        <h3 class="font-bold text-lg mb-1">Payments Drop Soon</h3>
+        <p class="text-sm text-gray-500 mb-4">Spots open on a first-come, first-served basis. Stay ready.</p>
+        <div class="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-full px-4 py-2">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span>
+          </span>
+          <span class="text-sm font-semibold text-orange-400">Waiting for drop</span>
+        </div>
+      </div>
+
+      <!-- Checkout: Open State (unified: name + email + payment) -->
+      <div id="checkout-section" class="hidden bg-gray-900/80 rounded-2xl border border-gray-800 p-5 sm:p-6">
         <h3 class="font-bold text-lg mb-1">Reserve Your Spot</h3>
         <p class="text-sm text-gray-500 mb-5">Enter your details and pay $10 to lock in.</p>
         <div class="space-y-4">
@@ -356,6 +370,6 @@
   <div id="toast" class="toast"></div>
 
   <script src="js/config.js"></script>
-  <script src="js/app.js?v=5"></script>
+  <script src="js/app.js?v=6"></script>
 </body>
 </html>

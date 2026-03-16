@@ -55,6 +55,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (!session.payments_open) {
+      return new Response(
+        JSON.stringify({ error: "Payments are not open yet" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     const { count } = await supabase
       .from("rsvps")
       .select("*", { count: "exact", head: true })
