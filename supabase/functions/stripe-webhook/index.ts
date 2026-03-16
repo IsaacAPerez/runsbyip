@@ -26,8 +26,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object as Stripe.Checkout.Session;
+    if (event.type === "payment_intent.succeeded") {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
       const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
@@ -37,7 +37,7 @@ Deno.serve(async (req: Request) => {
       const { error } = await supabase
         .from("rsvps")
         .update({ payment_status: "paid" })
-        .eq("stripe_session_id", session.id);
+        .eq("stripe_session_id", paymentIntent.id);
 
       if (error) {
         console.error("Failed to update RSVP:", error);
@@ -47,7 +47,7 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      console.log(`Payment confirmed for Stripe session ${session.id}`);
+      console.log(`Payment confirmed for PaymentIntent ${paymentIntent.id}`);
     }
 
     return new Response(JSON.stringify({ received: true }), {

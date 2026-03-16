@@ -35,7 +35,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Get session details
     const { data: session, error: sessionError } = await supabase
       .from("sessions")
       .select("*")
@@ -56,7 +55,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Check if session is full
     const { count } = await supabase
       .from("rsvps")
       .select("*", { count: "exact", head: true })
@@ -70,30 +68,13 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const origin =
-      req.headers.get("origin") ||
-      req.headers.get("referer")?.replace(/\/[^/]*$/, "") ||
-      "https://runsbyip.com";
-
-    // Create Stripe Checkout session in embedded mode
-    const checkoutSession = await stripe.checkout.sessions.create({
-      ui_mode: "embedded",
-      mode: "payment",
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `RunsByIP \u2014 ${session.date}`,
-              description: `${session.time} at ${session.location}`,
-            },
-            unit_amount: session.price_cents,
-          },
-          quantity: 1,
-        },
-      ],
-      customer_email: player_email,
-      return_url: `${origin}/success.html`,
+    // Create PaymentIntent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: session.price_cents,
+      currency: "usd",
+      automatic_payment_methods: { enabled: true },
+      receipt_email: player_email,
+      description: `RunsByIP \u2014 ${session.date}`,
       metadata: {
         session_id,
         player_name,
@@ -107,7 +88,7 @@ Deno.serve(async (req: Request) => {
       player_name,
       player_email,
       payment_status: "pending",
-      stripe_session_id: checkoutSession.id,
+      stripe_session_id: paymentIntent.id,
     });
 
     if (rsvpError) {
@@ -122,7 +103,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ client_secret: checkoutSession.client_secret }),
+      JSON.stringify({ client_secret: paymentIntent.client_secret }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
@@ -131,10 +112,7 @@ Deno.serve(async (req: Request) => {
     console.error("Error:", err);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json",
-      },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

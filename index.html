@@ -165,13 +165,31 @@
         </form>
       </div>
 
-      <!-- Embedded Checkout -->
-      <div id="checkout-section" class="hidden bg-gray-900/80 rounded-2xl border border-gray-800 p-6">
-        <div class="flex items-center justify-between mb-4">
+      <!-- Payment Section -->
+      <div id="payment-section" class="hidden bg-gray-900/80 rounded-2xl border border-gray-800 p-6">
+        <div class="flex items-center justify-between mb-5">
           <h3 class="font-bold text-lg">Complete Payment</h3>
-          <button id="checkout-back-btn" class="text-sm text-gray-400 hover:text-white transition-colors">&larr; Back</button>
+          <button id="payment-back-btn" class="text-sm text-gray-400 hover:text-white transition-colors">&larr; Back</button>
         </div>
-        <div id="checkout-container"></div>
+
+        <!-- Express Checkout (Apple Pay / Google Pay) -->
+        <div id="express-checkout-element" class="mb-4"></div>
+        <div id="express-divider" class="hidden flex items-center gap-3 mb-4">
+          <div class="flex-1 border-t border-gray-700"></div>
+          <span class="text-xs text-gray-500 uppercase">Or pay with card</span>
+          <div class="flex-1 border-t border-gray-700"></div>
+        </div>
+
+        <!-- Card Payment Element -->
+        <div id="payment-element" class="mb-5"></div>
+
+        <!-- Error message -->
+        <p id="payment-error" class="text-red-400 text-sm mb-4 hidden"></p>
+
+        <button id="pay-btn"
+          class="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 text-lg">
+          Pay $10
+        </button>
       </div>
 
       <!-- Session Full -->
