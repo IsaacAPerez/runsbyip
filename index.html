@@ -136,10 +136,34 @@
       </div>
       <div id="loading-fallback" class="hidden">
         <p class="text-white font-semibold mb-2">Having trouble loading?</p>
-        <p class="text-gray-400 text-sm mb-4">Instagram's browser doesn't play nice. Open in your real browser:</p>
+        <p class="text-gray-400 text-sm mb-4">Instagram's browser doesn't play nice. Tap below to open in your real browser.</p>
         <a id="open-in-browser" href="" class="inline-block bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-3 px-6 rounded-xl text-sm">Open in Safari</a>
+        <p class="text-gray-600 text-xs mt-3">Or tap <strong class="text-gray-400">···</strong> at the top right and choose "Open in Browser"</p>
       </div>
     </div>
+    <script>
+      (function(){
+        var t=setTimeout(function(){
+          var l=document.getElementById('loading');
+          if(l&&!l.classList.contains('hidden')){
+            var s=document.getElementById('loading-spinner');
+            var f=document.getElementById('loading-fallback');
+            var a=document.getElementById('open-in-browser');
+            if(s)s.classList.add('hidden');
+            if(f)f.classList.remove('hidden');
+            if(a){
+              a.href=window.location.href;
+              if(/iPhone|iPad/i.test(navigator.userAgent)){
+                a.textContent='Open in Safari';
+              }else{
+                a.textContent='Open in Browser';
+              }
+            }
+          }
+        },3000);
+        window.__clearLoadingFallback=function(){clearTimeout(t);};
+      })();
+    </script>
 
     <!-- No Session State -->
     <div id="no-session" class="hidden text-center py-12">
@@ -407,6 +431,6 @@
   <div id="toast" class="toast"></div>
 
   <script src="js/config.js"></script>
-  <script src="js/app.js?v=8"></script>
+  <script src="js/app.js?v=9"></script>
 </body>
 </html>
