@@ -36,8 +36,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" async></script>
-  <script src="https://js.stripe.com/v3/" async></script>
+  <script>
+    window.__isInApp = /Instagram|FBAN|FBAV|Twitter|Line\//i.test(navigator.userAgent);
+    if (!window.__isInApp) {
+      document.write('<scr'+'ipt src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></scr'+'ipt>');
+      document.write('<scr'+'ipt src="https://js.stripe.com/v3/"></scr'+'ipt>');
+    }
+  </script>
 </head>
 <body class="bg-gray-950 text-white min-h-screen font-sans" style="padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);">
 
@@ -169,6 +174,7 @@
           if(btn)btn.onclick=function(){copyLink(btn);};
         }
 
+        var delay=window.__isInApp?500:5000;
         var t=setTimeout(function(){
           if(done)return;
           var l=document.getElementById('loading');
@@ -482,6 +488,6 @@
   <div id="toast" class="toast"></div>
 
   <script src="js/config.js"></script>
-  <script src="js/app.js?v=11"></script>
+  <script src="js/app.js?v=12"></script>
 </body>
 </html>
