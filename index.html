@@ -36,8 +36,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="https://js.stripe.com/v3/"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" async></script>
+  <script src="https://js.stripe.com/v3/" async></script>
 </head>
 <body class="bg-gray-950 text-white min-h-screen font-sans" style="padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);">
 
@@ -143,25 +143,63 @@
     </div>
     <script>
       (function(){
+        var SUPA_URL='https://ncjgkthruvapcogqaxhi.supabase.co';
+        var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jamdrdGhydXZhcGNvZ3FheGhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NDMxODQsImV4cCI6MjA4OTIxOTE4NH0.68aoboLH1-iqLZCszeAKwuThqELKf4Ymt_U0mAbZxNI';
+        var today=new Date().toISOString().split('T')[0];
+        var done=false;
+
+        function fmtDate(d){
+          var dt=new Date(d+'T00:00:00');
+          return dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+        }
+
         var t=setTimeout(function(){
+          if(done)return;
           var l=document.getElementById('loading');
-          if(l&&!l.classList.contains('hidden')){
-            var s=document.getElementById('loading-spinner');
-            var f=document.getElementById('loading-fallback');
-            var a=document.getElementById('open-in-browser');
-            if(s)s.classList.add('hidden');
-            if(f)f.classList.remove('hidden');
-            if(a){
-              a.href=window.location.href;
-              if(/iPhone|iPad/i.test(navigator.userAgent)){
-                a.textContent='Open in Safari';
-              }else{
-                a.textContent='Open in Browser';
-              }
+          if(!l||l.style.display==='none')return;
+
+          fetch(SUPA_URL+'/rest/v1/sessions?select=*&date=gte.'+today+'&status=neq.cancelled&order=date.asc&limit=1',{
+            headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
+          })
+          .then(function(r){return r.json();})
+          .then(function(sessions){
+            if(!sessions||!sessions.length){
+              document.getElementById('loading-spinner').style.display='none';
+              var f=document.getElementById('loading-fallback');
+              f.style.display='block';
+              f.innerHTML='<p style="color:#fff;font-weight:600;margin-bottom:8px;">No upcoming sessions</p><p style="color:#9ca3af;font-size:14px;">Check back later!</p>';
+              return;
             }
-          }
+            var s=sessions[0];
+            return fetch(SUPA_URL+'/rest/v1/rsvps?select=id&session_id=eq.'+s.id+'&payment_status=in.(paid,cash)',{
+              headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'count=exact'}
+            }).then(function(r){
+              var count=parseInt(r.headers.get('content-range').split('/')[1])||0;
+              document.getElementById('loading-spinner').style.display='none';
+              var f=document.getElementById('loading-fallback');
+              f.style.display='block';
+              f.innerHTML=
+                '<div style="text-align:left;background:#111827;border:1px solid #1f2937;border-radius:16px;padding:20px;">'
+                +'<h3 style="font-size:18px;font-weight:700;color:#fff;margin:0 0 4px;">'+fmtDate(s.date)+'</h3>'
+                +'<p style="font-size:14px;color:#9ca3af;margin:0 0 16px;">'+s.time+' &middot; '+s.location+'</p>'
+                +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+                +'<span style="font-size:14px;color:#9ca3af;">'+count+'/'+s.max_players+' confirmed</span>'
+                +'<span style="font-size:14px;font-weight:600;color:#fff;">$'+(s.price_cents/100)+'</span>'
+                +'</div>'
+                +'<a href="'+window.location.href+'" target="_blank" style="display:block;text-align:center;background:linear-gradient(to right,#f97316,#ea580c);color:#fff;font-weight:700;padding:14px;border-radius:12px;text-decoration:none;font-size:16px;">RSVP & Pay $'+(s.price_cents/100)+'</a>'
+                +'<p style="text-align:center;color:#6b7280;font-size:12px;margin-top:8px;">Opens in your browser to complete payment</p>'
+                +'</div>';
+            });
+          })
+          .catch(function(){
+            document.getElementById('loading-spinner').style.display='none';
+            var f=document.getElementById('loading-fallback');
+            f.style.display='block';
+            var btn=document.getElementById('open-in-browser');
+            if(btn)btn.href=window.location.href;
+          });
         },3000);
-        window.__clearLoadingFallback=function(){clearTimeout(t);};
+        window.__clearLoadingFallback=function(){done=true;clearTimeout(t);};
       })();
     </script>
 
@@ -431,6 +469,6 @@
   <div id="toast" class="toast"></div>
 
   <script src="js/config.js"></script>
-  <script src="js/app.js?v=9"></script>
+  <script src="js/app.js?v=10"></script>
 </body>
 </html>

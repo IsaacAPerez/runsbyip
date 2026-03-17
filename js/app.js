@@ -1,6 +1,18 @@
-// Initialize Supabase client
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
+// Wait for async scripts to load before initializing
+function waitForDeps() {
+  return new Promise((resolve) => {
+    function check() {
+      if (window.supabase && window.Stripe) return resolve();
+      setTimeout(check, 100);
+    }
+    check();
+    // Give up after 10 seconds (in-app browser fallback handles it)
+    setTimeout(resolve, 10000);
+  });
+}
+
+let db, stripe;
+
 
 // DOM elements
 const loadingEl = document.getElementById('loading');
@@ -537,7 +549,12 @@ document.getElementById('install-btn').addEventListener('click', async () => {
 });
 
 // Initialize
-loadSession().catch(err => {
+waitForDeps().then(() => {
+  if (!window.supabase || !window.Stripe) return; // fallback script handles it
+  db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
+  return loadSession();
+}).catch(err => {
   console.error('Failed to load session:', err);
   showView('no-session');
 });
