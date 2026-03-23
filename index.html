@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>RunsByIP — Weekly Pickup Basketball in Los Angeles</title>
   <meta name="description" content="RunsByIP organizes weekly pickup basketball sessions in Los Angeles. RSVP and pay online — show up and hoop.">
-  <meta name="theme-color" content="#030712">
+  <meta name="theme-color" content="#080808">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏀</text></svg>">
@@ -28,13 +28,27 @@
     tailwind.config = {
       theme: {
         extend: {
-          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Space Grotesk', 'sans-serif'],
+          },
+          colors: {
+            court: {
+              orange: '#FF5C00',
+            },
+            surface: {
+              DEFAULT: '#0F0F0F',
+              light: '#1A1A1A',
+              lighter: '#2A2A2A',
+            },
+            bg: '#080808',
+          },
         }
       }
     }
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <script>
     window.__isInApp = /Instagram|FBAN|FBAV|Twitter|Line\//i.test(navigator.userAgent);
@@ -44,86 +58,83 @@
     }
   </script>
 </head>
-<body class="bg-gray-950 text-white min-h-screen font-sans" style="padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);">
+<body class="bg-bg text-white min-h-screen font-sans" style="padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);">
 
   <!-- Header -->
-  <header class="border-b border-gray-800/50 sticky top-0 bg-gray-950/95 backdrop-blur-sm z-40">
+  <header class="border-b border-surface-light/50 sticky top-0 bg-bg/95 backdrop-blur-sm z-40">
     <div class="max-w-2xl mx-auto px-5 py-4 flex items-center justify-between">
       <div class="flex items-center gap-2.5">
         <span class="text-xl">🏀</span>
-        <h1 class="text-lg font-bold tracking-tight">RunsByIP</h1>
+        <h1 class="wordmark">RunsByIP</h1>
       </div>
-      <button id="share-btn" class="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white active:text-white py-2 px-3 -mr-3 rounded-lg transition-colors">
+      <button id="share-btn" class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-white active:text-white py-2 px-3 -mr-3 rounded-lg transition-colors">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
         Share
       </button>
     </div>
   </header>
 
-  <!-- Hero — compact on mobile, spacious on desktop -->
-  <section class="border-b border-gray-800/30">
-    <div class="max-w-2xl mx-auto px-5 py-8 sm:py-16 text-center">
-      <h2 class="text-2xl sm:text-4xl font-extrabold tracking-tight mb-3 leading-tight">
-        Pickup Basketball.<br>Every Wednesday.
-      </h2>
-      <p class="text-base sm:text-lg text-gray-400 max-w-md mx-auto mb-6 sm:mb-8">
-        RSVP online, pay $10, and show up ready to hoop.
+  <!-- Hero -->
+  <section class="border-b border-surface-light/30">
+    <div class="max-w-2xl mx-auto px-5 py-12 sm:py-24">
+      <p class="hero-title">
+        WEEKLY <span class="slash">/</span><br>
+        PICKUP <span class="slash">/</span><br>
+        BASKETBALL<span class="text-court-orange">.</span>
       </p>
-      <a href="#next-session" class="inline-block bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-3.5 px-8 rounded-xl transition-all shadow-lg shadow-orange-500/20 text-base sm:text-lg">
-        See This Week's Session
+      <p class="text-gray-500 text-base sm:text-lg mt-6 max-w-sm">
+        RSVP online, pay $10, and show up ready to hoop. Every Wednesday in LA.
+      </p>
+      <a href="#next-session" class="inline-flex items-center gap-2 mt-8 text-white font-semibold text-sm uppercase tracking-wider border border-white/30 hover:border-white px-6 py-3 rounded-lg transition-colors">
+        This Week's Session
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
       </a>
     </div>
   </section>
 
   <!-- Highlights -->
-  <section class="border-b border-gray-800/30">
+  <section class="border-b border-surface-light/30">
     <div class="max-w-2xl mx-auto px-5 py-8 sm:py-10">
-      <h3 class="font-semibold text-sm uppercase tracking-wider text-gray-500 mb-4 text-center">Highlights</h3>
+      <h3 class="section-label mb-4 text-center">Highlights</h3>
       <div class="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory -mx-5 px-5" style="-webkit-overflow-scrolling: touch; scrollbar-width: none;">
-        <div class="snap-center shrink-0 w-40 sm:w-48 aspect-[9/16] rounded-xl overflow-hidden bg-gray-900 border border-gray-800">
+        <div class="snap-center shrink-0 w-40 sm:w-48 aspect-[9/16] rounded-lg overflow-hidden bg-surface border border-surface-light">
           <iframe src="https://www.youtube.com/embed/SPkqLVbNf_I?rel=0&modestbranding=1" title="Highlight" class="w-full h-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
         </div>
-        <div class="snap-center shrink-0 w-40 sm:w-48 aspect-[9/16] rounded-xl overflow-hidden bg-gray-900 border border-gray-800">
+        <div class="snap-center shrink-0 w-40 sm:w-48 aspect-[9/16] rounded-lg overflow-hidden bg-surface border border-surface-light">
           <iframe src="https://www.youtube.com/embed/El-05R5z48A?rel=0&modestbranding=1" title="Highlight" class="w-full h-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
         </div>
-        <div class="snap-center shrink-0 w-40 sm:w-48 aspect-[9/16] rounded-xl overflow-hidden bg-gray-900 border border-gray-800">
+        <div class="snap-center shrink-0 w-40 sm:w-48 aspect-[9/16] rounded-lg overflow-hidden bg-surface border border-surface-light">
           <iframe src="https://www.youtube.com/embed/FMFt1NnByuI?rel=0&modestbranding=1" title="Highlight" class="w-full h-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
         </div>
-        <div class="snap-center shrink-0 w-40 sm:w-48 aspect-[9/16] rounded-xl overflow-hidden bg-gray-900 border border-gray-800">
+        <div class="snap-center shrink-0 w-40 sm:w-48 aspect-[9/16] rounded-lg overflow-hidden bg-surface border border-surface-light">
           <iframe src="https://www.youtube.com/embed/4WZO8K4uBOU?rel=0&modestbranding=1" title="Highlight" class="w-full h-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
         </div>
-        <div class="snap-center shrink-0 w-40 sm:w-48 aspect-[9/16] rounded-xl overflow-hidden bg-gray-900 border border-gray-800">
+        <div class="snap-center shrink-0 w-40 sm:w-48 aspect-[9/16] rounded-lg overflow-hidden bg-surface border border-surface-light">
           <iframe src="https://www.youtube.com/embed/PS-q1cazuHY?rel=0&modestbranding=1" title="Highlight" class="w-full h-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- How It Works — hidden on mobile -->
-  <section class="border-b border-gray-800/30 hidden sm:block">
-    <div class="max-w-3xl mx-auto px-5 py-12">
-      <h3 class="font-semibold text-sm uppercase tracking-wider text-gray-500 mb-6 text-center">How It Works</h3>
-      <div class="grid grid-cols-3 gap-6">
-        <div class="text-center">
-          <div class="w-12 h-12 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto mb-3">
-            <span class="text-orange-400 font-bold">1</span>
-          </div>
-          <h4 class="font-semibold mb-1">RSVP</h4>
-          <p class="text-sm text-gray-400">Enter your name and email to reserve your spot for the week.</p>
+  <!-- How It Works — typographic layout -->
+  <section class="border-b border-surface-light/30 hidden sm:block">
+    <div class="max-w-2xl mx-auto px-5 py-14">
+      <h3 class="section-label mb-10 text-center">How It Works</h3>
+      <div class="grid grid-cols-3 gap-8">
+        <div>
+          <span class="step-number">01</span>
+          <h4 class="font-display font-bold text-base mt-2 mb-1 uppercase tracking-wide">RSVP</h4>
+          <p class="text-sm text-gray-500 leading-relaxed">Enter your name and email to reserve your spot for the week.</p>
         </div>
-        <div class="text-center">
-          <div class="w-12 h-12 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto mb-3">
-            <span class="text-orange-400 font-bold">2</span>
-          </div>
-          <h4 class="font-semibold mb-1">Pay $10</h4>
-          <p class="text-sm text-gray-400">Secure checkout powered by Stripe. Covers your share of the gym.</p>
+        <div>
+          <span class="step-number">02</span>
+          <h4 class="font-display font-bold text-base mt-2 mb-1 uppercase tracking-wide">Pay $10</h4>
+          <p class="text-sm text-gray-500 leading-relaxed">Secure checkout powered by Stripe. Covers your share of the gym.</p>
         </div>
-        <div class="text-center">
-          <div class="w-12 h-12 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto mb-3">
-            <span class="text-orange-400 font-bold">3</span>
-          </div>
-          <h4 class="font-semibold mb-1">Show Up & Hoop</h4>
-          <p class="text-sm text-gray-400">You're locked in. Show up on Wednesday and get your runs in.</p>
+        <div>
+          <span class="step-number">03</span>
+          <h4 class="font-display font-bold text-base mt-2 mb-1 uppercase tracking-wide">Show Up</h4>
+          <p class="text-sm text-gray-500 leading-relaxed">You're locked in. Show up on Wednesday and get your runs in.</p>
         </div>
       </div>
     </div>
@@ -131,13 +142,13 @@
 
   <main class="max-w-2xl mx-auto px-5 py-8 sm:py-10" id="next-session">
 
-    <h3 class="font-semibold text-sm uppercase tracking-wider text-gray-500 mb-5 text-center">Next Session</h3>
+    <h3 class="section-label mb-5 text-center">Next Session</h3>
 
     <!-- Loading State -->
     <div id="loading" class="text-center py-12">
       <div id="loading-spinner">
-        <div class="spinner mx-auto mb-4" style="border-color: rgba(255,255,255,0.1); border-top-color: #f97316; width: 36px; height: 36px; border-width: 3px;"></div>
-        <p class="text-gray-500 text-sm">Loading session...</p>
+        <div class="spinner mx-auto mb-4" style="border-color: rgba(255,255,255,0.1); border-top-color: #FF5C00; width: 36px; height: 36px; border-width: 3px;"></div>
+        <p class="text-gray-600 text-sm">Loading session...</p>
       </div>
       <div id="loading-fallback" class="hidden"></div>
     </div>
@@ -175,7 +186,7 @@
           btn.style.background=copied?'#22c55e':'#374151';
           setTimeout(function(){
             btn.textContent='Copy Link';
-            btn.style.background='linear-gradient(to right,#f97316,#ea580c)';
+            btn.style.background='#FF5C00';
           },3000);
         }
 
@@ -199,7 +210,7 @@
           .then(function(r){return r.json();})
           .then(function(sessions){
             if(!sessions||!sessions.length){
-              showFallback('<p style="color:#fff;font-weight:600;margin-bottom:8px;">No upcoming sessions</p><p style="color:#9ca3af;font-size:14px;">Check back later!</p>');
+              showFallback('<p style="color:#fff;font-weight:600;margin-bottom:8px;">No upcoming sessions</p><p style="color:#666;font-size:14px;">Check back later!</p>');
               return;
             }
             var s=sessions[0];
@@ -209,15 +220,15 @@
               var range=r.headers.get('content-range');
               var count=range?parseInt(range.split('/')[1])||0:0;
               showFallback(
-                '<div style="text-align:left;background:#111827;border:1px solid #1f2937;border-radius:16px;padding:20px;">'
+                '<div style="text-align:left;background:#0F0F0F;border:1px solid #1A1A1A;border-left:4px solid #FF5C00;border-radius:8px;padding:20px;">'
                 +'<h3 style="font-size:18px;font-weight:700;color:#fff;margin:0 0 4px;">'+fmtDate(s.date)+'</h3>'
-                +'<p style="font-size:14px;color:#9ca3af;margin:0 0 16px;">'+s.time+' &middot; '+s.location+'</p>'
+                +'<p style="font-size:14px;color:#666;margin:0 0 16px;">'+s.time+' &middot; '+s.location+'</p>'
                 +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
-                +'<span style="font-size:14px;color:#9ca3af;">'+count+'/'+s.max_players+' confirmed</span>'
+                +'<span style="font-size:14px;color:#666;">'+count+'/'+s.max_players+' confirmed</span>'
                 +'<span style="font-size:14px;font-weight:600;color:#fff;">$'+(s.price_cents/100)+'</span>'
                 +'</div>'
-                +'<button id="copy-link-btn" style="width:100%;text-align:center;background:linear-gradient(to right,#f97316,#ea580c);color:#fff;font-weight:700;padding:14px;border-radius:12px;border:none;font-size:16px;cursor:pointer;">Copy Link</button>'
-                +'<p style="text-align:center;color:#6b7280;font-size:12px;margin-top:8px;">Paste in Safari to RSVP & pay</p>'
+                +'<button id="copy-link-btn" style="width:100%;text-align:center;background:#FF5C00;color:#fff;font-weight:700;padding:14px;border-radius:8px;border:none;font-size:14px;cursor:pointer;text-transform:uppercase;letter-spacing:0.05em;">Copy Link</button>'
+                +'<p style="text-align:center;color:#666;font-size:12px;margin-top:8px;">Paste in Safari to RSVP & pay</p>'
                 +'</div>'
               );
             });
@@ -225,9 +236,9 @@
           .catch(function(){
             showFallback(
               '<p style="color:#fff;font-weight:600;margin-bottom:8px;">Open in Safari to continue</p>'
-              +'<p style="color:#9ca3af;font-size:14px;margin-bottom:16px;">Instagram\'s browser can\'t load this page.</p>'
-              +'<button id="copy-link-btn" style="background:linear-gradient(to right,#f97316,#ea580c);color:#fff;font-weight:700;padding:14px 24px;border-radius:12px;border:none;font-size:16px;cursor:pointer;">Copy Link</button>'
-              +'<p style="color:#6b7280;font-size:12px;margin-top:8px;">Paste in Safari to open the site</p>'
+              +'<p style="color:#666;font-size:14px;margin-bottom:16px;">Instagram\'s browser can\'t load this page.</p>'
+              +'<button id="copy-link-btn" style="background:#FF5C00;color:#fff;font-weight:700;padding:14px 24px;border-radius:8px;border:none;font-size:14px;cursor:pointer;text-transform:uppercase;letter-spacing:0.05em;">Copy Link</button>'
+              +'<p style="color:#666;font-size:12px;margin-top:8px;">Paste in Safari to open the site</p>'
             );
           });
         },500);
@@ -237,106 +248,106 @@
     <!-- No Session State -->
     <div id="no-session" class="hidden text-center py-12">
       <div class="text-6xl mb-5">🏀</div>
-      <h2 class="text-2xl font-bold mb-2">No Upcoming Session</h2>
-      <p class="text-gray-400 max-w-sm mx-auto">Check back soon — the next session will be posted here.</p>
+      <h2 class="text-2xl font-display font-bold mb-2">No Upcoming Session</h2>
+      <p class="text-gray-500 max-w-sm mx-auto">Check back soon — the next session will be posted here.</p>
     </div>
 
     <!-- Cancelled Session State -->
     <div id="cancelled-session" class="hidden text-center py-12">
       <div class="text-6xl mb-5">😔</div>
-      <h2 class="text-2xl font-bold mb-2">Session Cancelled</h2>
-      <p class="text-gray-400">This week's session has been cancelled. Check back next week!</p>
+      <h2 class="text-2xl font-display font-bold mb-2">Session Cancelled</h2>
+      <p class="text-gray-500">This week's session has been cancelled. Check back next week!</p>
     </div>
 
     <!-- Session Card -->
     <div id="session-card" class="hidden space-y-4">
 
-      <!-- Session Info + Countdown -->
-      <div class="bg-gradient-to-br from-orange-500/10 to-orange-600/5 rounded-2xl border border-orange-500/20 p-5 sm:p-6">
-        <div class="flex items-start justify-between mb-3">
-          <span id="session-status-badge" class="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-green-500/15 text-green-400 border border-green-500/20">Open</span>
-          <span id="session-price" class="text-2xl font-extrabold text-orange-400">$10</span>
+      <!-- Session Info — ticket style -->
+      <div class="bg-surface rounded-lg ticket-border p-5 sm:p-6">
+        <div class="flex items-start justify-between mb-4">
+          <span id="session-status-badge" class="px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider bg-green-500/10 text-green-400 border border-green-500/20">Open</span>
+          <span id="session-price" class="text-2xl font-display font-bold text-court-orange">$10</span>
         </div>
-        <h2 id="session-date" class="text-2xl sm:text-3xl font-extrabold mb-3 tracking-tight"></h2>
-        <div class="space-y-2 mb-4">
-          <p class="flex items-center gap-2.5 text-gray-300 text-base">
-            <svg class="w-5 h-5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <h2 id="session-date" class="text-2xl sm:text-3xl font-display font-bold mb-3 tracking-tight uppercase"></h2>
+        <div class="space-y-2 mb-5">
+          <p class="flex items-center gap-2.5 text-gray-400 text-base">
+            <svg class="w-5 h-5 text-gray-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             <span id="session-time"></span>
           </p>
-          <p class="flex items-center gap-2.5 text-gray-300 text-base">
-            <svg class="w-5 h-5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <p class="flex items-center gap-2.5 text-gray-400 text-base">
+            <svg class="w-5 h-5 text-gray-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             <span id="session-location"></span>
           </p>
         </div>
-        <!-- Countdown Timer -->
-        <div id="countdown" class="grid grid-cols-4 gap-2 text-center">
-          <div class="bg-gray-950/50 rounded-xl py-2.5">
-            <span id="cd-days" class="text-2xl font-extrabold text-white block">0</span>
-            <span class="text-xs text-gray-500 uppercase">Days</span>
+        <!-- Countdown Timer — horizontal bar -->
+        <div id="countdown" class="countdown-bar">
+          <div class="cd-unit">
+            <span id="cd-days" class="cd-value">0</span>
+            <span class="cd-label">D</span>
           </div>
-          <div class="bg-gray-950/50 rounded-xl py-2.5">
-            <span id="cd-hours" class="text-2xl font-extrabold text-white block">0</span>
-            <span class="text-xs text-gray-500 uppercase">Hours</span>
+          <span class="cd-sep">:</span>
+          <div class="cd-unit">
+            <span id="cd-hours" class="cd-value">0</span>
+            <span class="cd-label">H</span>
           </div>
-          <div class="bg-gray-950/50 rounded-xl py-2.5">
-            <span id="cd-mins" class="text-2xl font-extrabold text-white block">0</span>
-            <span class="text-xs text-gray-500 uppercase">Mins</span>
+          <span class="cd-sep">:</span>
+          <div class="cd-unit">
+            <span id="cd-mins" class="cd-value">0</span>
+            <span class="cd-label">M</span>
           </div>
-          <div class="bg-gray-950/50 rounded-xl py-2.5">
-            <span id="cd-secs" class="text-2xl font-extrabold text-orange-400 block">0</span>
-            <span class="text-xs text-gray-500 uppercase">Secs</span>
+          <span class="cd-sep">:</span>
+          <div class="cd-unit">
+            <span id="cd-secs" class="cd-value text-court-orange">0</span>
+            <span class="cd-label">S</span>
           </div>
         </div>
       </div>
 
       <!-- Weather Widget -->
-      <div id="weather-widget" class="hidden bg-gray-900/80 rounded-2xl border border-gray-800 p-4 sm:p-5">
+      <div id="weather-widget" class="hidden bg-surface rounded-lg border border-surface-light p-4 sm:p-5">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
             <span id="weather-icon" class="text-3xl">☀️</span>
             <div>
-              <p class="text-sm text-gray-400">Game Day Weather</p>
-              <p class="font-bold text-lg"><span id="weather-temp"></span>&deg;F <span id="weather-desc" class="text-sm font-normal text-gray-400"></span></p>
+              <p class="text-sm text-gray-500">Game Day Weather</p>
+              <p class="font-bold text-lg"><span id="weather-temp"></span>&deg;F <span id="weather-desc" class="text-sm font-normal text-gray-500"></span></p>
             </div>
           </div>
-          <div class="text-right text-sm text-gray-400">
+          <div class="text-right text-sm text-gray-500">
             <p><span id="weather-high"></span>&deg; / <span id="weather-low"></span>&deg;</p>
             <p id="weather-rain" class="text-xs"></p>
           </div>
         </div>
       </div>
 
-      <!-- Court Visualization -->
-      <div class="bg-gray-900/80 rounded-2xl border border-gray-800 p-5 sm:p-6">
+      <!-- Court Visualization + Squad List -->
+      <div class="bg-surface rounded-lg border border-surface-light p-5 sm:p-6">
         <div class="flex justify-between items-baseline mb-4">
-          <h3 class="font-semibold text-sm uppercase tracking-wider text-gray-400">The Court</h3>
-          <span id="rsvp-count" class="text-xl font-extrabold text-orange-400"></span>
+          <h3 class="section-label">Squad</h3>
+          <span id="rsvp-count" class="text-xl font-display font-bold text-court-orange"></span>
         </div>
         <!-- Court SVG -->
-        <div id="court-visual" class="relative w-full aspect-[2/1] bg-orange-900/20 rounded-xl border border-orange-800/30 overflow-hidden mb-3">
+        <div id="court-visual" class="relative w-full aspect-[2/1] bg-court-orange/10 rounded-lg border border-court-orange/20 overflow-hidden mb-3">
           <div class="absolute inset-0 flex items-center justify-center">
-            <!-- Center circle -->
-            <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-orange-700/30"></div>
+            <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-court-orange/20"></div>
           </div>
-          <!-- Half court line -->
-          <div class="absolute top-0 bottom-0 left-1/2 w-0.5 bg-orange-700/30"></div>
-          <!-- Player dots container -->
+          <div class="absolute top-0 bottom-0 left-1/2 w-0.5 bg-court-orange/20"></div>
           <div id="court-dots" class="absolute inset-0"></div>
         </div>
-        <div class="w-full bg-gray-800 rounded-full h-3.5 mb-3 overflow-hidden">
-          <div id="rsvp-progress" class="bg-gradient-to-r from-orange-500 to-orange-400 h-3.5 rounded-full progress-fill" style="width: 0%"></div>
+        <div class="w-full bg-surface-light rounded-full h-2 mb-3 overflow-hidden">
+          <div id="rsvp-progress" class="bg-court-orange h-2 rounded-full progress-fill" style="width: 0%"></div>
         </div>
-        <p id="rsvp-message" class="text-sm text-gray-400"></p>
-        <div id="player-list" class="mt-4 space-y-2.5"></div>
+        <p id="rsvp-message" class="text-sm text-gray-500"></p>
+        <div id="player-list" class="mt-4"></div>
         <!-- Team Randomizer -->
-        <div id="team-randomizer" class="hidden mt-4 pt-4 border-t border-gray-800">
-          <button id="randomize-btn" class="w-full flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-sm font-semibold text-gray-300 py-3 rounded-xl transition-colors">
+        <div id="team-randomizer" class="hidden mt-4 pt-4 border-t border-surface-light">
+          <button id="randomize-btn" class="w-full flex items-center justify-center gap-2 bg-surface-light hover:bg-surface-lighter active:bg-surface-lighter text-sm font-semibold text-gray-400 py-3 rounded-lg transition-colors uppercase tracking-wider">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
             Randomize Teams
           </button>
           <div id="teams-display" class="hidden mt-4 grid grid-cols-3 gap-3">
             <div>
-              <h5 class="text-xs font-bold uppercase tracking-wider text-orange-400 mb-2">Team 1</h5>
+              <h5 class="text-xs font-bold uppercase tracking-wider text-court-orange mb-2">Team 1</h5>
               <div id="team-1" class="space-y-1.5"></div>
             </div>
             <div>
@@ -350,132 +361,131 @@
           </div>
         </div>
         <!-- Waitlist -->
-        <div id="waitlist-section" class="hidden mt-4 pt-4 border-t border-gray-800">
-          <h4 class="text-sm font-semibold text-gray-400 mb-2">Waitlist</h4>
+        <div id="waitlist-section" class="hidden mt-4 pt-4 border-t border-surface-light">
+          <h4 class="text-sm font-semibold text-gray-500 mb-2">Waitlist</h4>
           <div id="waitlist-list" class="space-y-2"></div>
         </div>
       </div>
 
       <!-- Install App Banner -->
-      <div id="install-banner" class="hidden bg-gray-900/80 rounded-2xl border border-gray-800 p-4 flex items-center justify-between">
+      <div id="install-banner" class="hidden bg-surface rounded-lg border border-surface-light p-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <span class="text-2xl">🏀</span>
           <div>
             <p class="font-semibold text-sm">Add RunsByIP to Home Screen</p>
-            <p class="text-xs text-gray-500">Quick access every week</p>
+            <p class="text-xs text-gray-600">Quick access every week</p>
           </div>
         </div>
-        <button id="install-btn" class="bg-orange-500 active:bg-orange-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors shrink-0">Install</button>
+        <button id="install-btn" class="bg-court-orange active:bg-orange-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors shrink-0 uppercase tracking-wider">Install</button>
       </div>
 
       <!-- Checkout: Locked State -->
-      <div id="checkout-locked" class="hidden bg-gray-900/80 rounded-2xl border border-gray-800 p-5 sm:p-6 text-center">
+      <div id="checkout-locked" class="hidden bg-surface rounded-lg border border-surface-light p-5 sm:p-6 text-center">
         <div class="text-4xl mb-3">🔒</div>
-        <h3 class="font-bold text-lg mb-1">Payments Drop Soon</h3>
-        <p class="text-sm text-gray-500 mb-4">Spots open on a first-come, first-served basis. Stay ready.</p>
-        <div class="inline-flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-full px-4 py-2">
+        <h3 class="font-display font-bold text-lg mb-1">Payments Drop Soon</h3>
+        <p class="text-sm text-gray-600 mb-4">Spots open on a first-come, first-served basis. Stay ready.</p>
+        <div class="inline-flex items-center gap-2 bg-court-orange/10 border border-court-orange/20 rounded-full px-4 py-2">
           <span class="relative flex h-2.5 w-2.5">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span>
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-court-orange opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-court-orange"></span>
           </span>
-          <span class="text-sm font-semibold text-orange-400">Waiting for drop</span>
+          <span class="text-sm font-semibold text-court-orange">Waiting for drop</span>
         </div>
       </div>
 
-      <!-- Checkout: Open State (unified: name + email + payment) -->
-      <div id="checkout-section" class="hidden bg-gray-900/80 rounded-2xl border border-gray-800 p-5 sm:p-6">
-        <h3 class="font-bold text-lg mb-1">Reserve Your Spot</h3>
-        <p class="text-sm text-gray-500 mb-5">Enter your details and pay $10 to lock in.</p>
+      <!-- Checkout: Open State -->
+      <div id="checkout-section" class="hidden bg-surface rounded-lg border border-surface-light p-5 sm:p-6">
+        <h3 class="font-display font-bold text-lg mb-1 uppercase tracking-wide">Reserve Your Spot</h3>
+        <p class="text-sm text-gray-600 mb-5">Enter your details and pay $10 to lock in.</p>
         <div class="space-y-4">
           <div>
-            <label for="player-name" class="block text-base font-medium text-gray-400 mb-2">Name</label>
+            <label for="player-name" class="block text-sm font-medium text-gray-500 mb-2 uppercase tracking-wider">Name</label>
             <input type="text" id="player-name" required placeholder="Your first name" autocomplete="given-name"
-              class="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition">
+              class="w-full bg-surface-light border border-surface-lighter rounded-lg px-4 py-3.5 text-base text-white placeholder-gray-600 focus:outline-none transition">
           </div>
           <div>
-            <label for="player-email" class="block text-base font-medium text-gray-400 mb-2">Email</label>
+            <label for="player-email" class="block text-sm font-medium text-gray-500 mb-2 uppercase tracking-wider">Email</label>
             <input type="email" id="player-email" required placeholder="For your receipt" autocomplete="email" inputmode="email"
-              class="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition">
+              class="w-full bg-surface-light border border-surface-lighter rounded-lg px-4 py-3.5 text-base text-white placeholder-gray-600 focus:outline-none transition">
           </div>
         </div>
-        <!-- Payment area (mounts immediately) -->
+        <!-- Payment area -->
         <div id="payment-area" class="mt-5 hidden">
           <div id="express-checkout-element" class="mb-4"></div>
           <div id="express-divider" class="hidden flex items-center gap-3 mb-5">
-            <div class="flex-1 border-t border-gray-700"></div>
-            <span class="text-sm text-gray-500">Or pay with card</span>
-            <div class="flex-1 border-t border-gray-700"></div>
+            <div class="flex-1 border-t border-surface-lighter"></div>
+            <span class="text-sm text-gray-600">Or pay with card</span>
+            <div class="flex-1 border-t border-surface-lighter"></div>
           </div>
           <div id="payment-element" class="mb-4"></div>
         </div>
         <p id="payment-error" class="text-red-400 text-sm mt-4 hidden"></p>
         <button id="pay-btn"
-          class="w-full mt-5 bg-gradient-to-r from-orange-500 to-orange-600 active:from-orange-700 active:to-orange-800 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-orange-500/20 text-lg">
+          class="w-full mt-5 bg-court-orange active:bg-orange-700 text-white font-bold py-4 rounded-lg transition-colors text-sm uppercase tracking-widest">
           RSVP & Pay $10
         </button>
         <p class="text-xs text-gray-600 text-center mt-3">Refunds available — $9 of $10 returned. See <a href="#refund-policy" class="underline hover:text-gray-400">policy</a>.</p>
       </div>
 
-      <!-- Waitlist Form (shown when full) -->
-      <div id="waitlist-form-section" class="hidden bg-gray-900/80 rounded-2xl border border-yellow-600/20 p-5 sm:p-6">
-        <h3 class="font-bold text-lg mb-1">Session Full — Join Waitlist</h3>
-        <p class="text-sm text-gray-500 mb-5">You'll be notified if a spot opens up. No charge until you're in.</p>
+      <!-- Waitlist Form -->
+      <div id="waitlist-form-section" class="hidden bg-surface rounded-lg border border-yellow-600/20 p-5 sm:p-6">
+        <h3 class="font-display font-bold text-lg mb-1 uppercase tracking-wide">Session Full — Join Waitlist</h3>
+        <p class="text-sm text-gray-600 mb-5">You'll be notified if a spot opens up. No charge until you're in.</p>
         <form id="waitlist-form" class="space-y-5">
           <div>
-            <label for="wl-name" class="block text-base font-medium text-gray-400 mb-2">Name</label>
+            <label for="wl-name" class="block text-sm font-medium text-gray-500 mb-2 uppercase tracking-wider">Name</label>
             <input type="text" id="wl-name" required placeholder="Your first name" autocomplete="given-name"
-              class="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition">
+              class="w-full bg-surface-light border border-surface-lighter rounded-lg px-4 py-3.5 text-base text-white placeholder-gray-600 focus:outline-none transition">
           </div>
           <div>
-            <label for="wl-email" class="block text-base font-medium text-gray-400 mb-2">Email</label>
+            <label for="wl-email" class="block text-sm font-medium text-gray-500 mb-2 uppercase tracking-wider">Email</label>
             <input type="email" id="wl-email" required placeholder="We'll reach out if a spot opens" autocomplete="email" inputmode="email"
-              class="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition">
+              class="w-full bg-surface-light border border-surface-lighter rounded-lg px-4 py-3.5 text-base text-white placeholder-gray-600 focus:outline-none transition">
           </div>
           <button type="submit" id="wl-btn"
-            class="w-full bg-yellow-600 active:bg-yellow-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-yellow-600/20 text-lg">
+            class="w-full bg-yellow-600 active:bg-yellow-700 text-white font-bold py-4 rounded-lg transition-colors text-sm uppercase tracking-widest">
             Join Waitlist
           </button>
         </form>
       </div>
 
-      <!-- Session Full (no waitlist fallback) -->
-      <div id="session-full" class="hidden bg-gray-900/80 rounded-2xl border border-gray-800 p-5 sm:p-6 text-center">
-        <p class="text-xl font-bold text-orange-400">Session is full!</p>
-        <p class="text-gray-400 mt-1">All spots have been claimed. See you next week!</p>
+      <!-- Session Full -->
+      <div id="session-full" class="hidden bg-surface rounded-lg border border-surface-light p-5 sm:p-6 text-center">
+        <p class="text-xl font-display font-bold text-court-orange">Session is full!</p>
+        <p class="text-gray-500 mt-1">All spots have been claimed. See you next week!</p>
       </div>
     </div>
 
-    <!-- Bottom breathing room on mobile -->
     <div class="h-8 sm:h-0"></div>
   </main>
 
   <!-- About Section -->
-  <section class="border-t border-gray-800/30">
-    <div class="max-w-2xl mx-auto px-5 py-10 sm:py-12 text-center">
-      <h3 class="text-lg sm:text-xl font-bold mb-3">About RunsByIP</h3>
-      <p class="text-gray-400 max-w-xl mx-auto leading-relaxed text-sm sm:text-base">
+  <section class="border-t border-surface-light/30">
+    <div class="max-w-2xl mx-auto px-5 py-10 sm:py-12">
+      <h3 class="font-display font-bold text-lg sm:text-xl mb-3 uppercase tracking-wide">About</h3>
+      <p class="text-gray-500 max-w-xl leading-relaxed text-sm sm:text-base">
         RunsByIP is a weekly pickup basketball community in Los Angeles, organized by Isaac Perez. Every Wednesday, we book a gym and run 5v5 games. Payment covers your share of the gym rental — no hassle, no chasing people down. Just RSVP, pay, and show up ready to play.
       </p>
     </div>
   </section>
 
   <!-- Refund Policy -->
-  <section id="refund-policy" class="border-t border-gray-800/30">
+  <section id="refund-policy" class="border-t border-surface-light/30">
     <div class="max-w-2xl mx-auto px-5 py-10 sm:py-12">
-      <h3 class="text-lg sm:text-xl font-bold mb-4 text-center">Refund Policy</h3>
-      <div class="text-gray-400 text-sm sm:text-base leading-relaxed max-w-xl mx-auto space-y-3">
+      <h3 class="font-display font-bold text-lg sm:text-xl mb-4 uppercase tracking-wide">Refund Policy</h3>
+      <div class="text-gray-500 text-sm sm:text-base leading-relaxed max-w-xl space-y-3">
         <p>All refunds are <strong class="text-white">$9 of your $10</strong>. The $1 difference covers non-recoverable processing fees.</p>
         <ul class="space-y-2">
           <li class="flex items-start gap-2">
-            <span class="text-gray-500 shrink-0">&#8226;</span>
+            <span class="text-gray-600 shrink-0">&#8226;</span>
             <span>Can't make it? No worries — you get <strong class="text-white">$9 back</strong>.</span>
           </li>
           <li class="flex items-start gap-2">
-            <span class="text-gray-500 shrink-0">&#8226;</span>
+            <span class="text-gray-600 shrink-0">&#8226;</span>
             <span>Session cancelled by us? You still get <strong class="text-white">$9 back</strong>.</span>
           </li>
           <li class="flex items-start gap-2">
-            <span class="text-gray-500 shrink-0">&#8226;</span>
+            <span class="text-gray-600 shrink-0">&#8226;</span>
             <span>Refund requests must be made <strong class="text-white">before the session starts</strong>.</span>
           </li>
         </ul>
@@ -484,19 +494,14 @@
     </div>
   </section>
 
-  <!-- Contact -->
-  <section class="border-t border-gray-800/30">
-    <div class="max-w-2xl mx-auto px-5 py-8 sm:py-10 text-center">
-      <h3 class="font-semibold text-sm uppercase tracking-wider text-gray-500 mb-3">Questions?</h3>
-      <p class="text-gray-400 text-sm">Reach out on Instagram or email <span class="text-white">hello@runsbyip.com</span></p>
-    </div>
-  </section>
-
   <!-- Footer -->
-  <footer class="border-t border-gray-800/30">
+  <footer class="border-t border-surface-light/30">
     <div class="max-w-2xl mx-auto px-5 py-6 flex items-center justify-between text-xs text-gray-600">
       <span>&copy; 2026 RunsByIP</span>
-      <a href="admin.html" class="hover:text-gray-400 transition-colors">Admin</a>
+      <div class="flex items-center gap-4">
+        <span>hello@runsbyip.com</span>
+        <a href="admin.html" class="hover:text-gray-400 transition-colors">Admin</a>
+      </div>
     </div>
   </footer>
 

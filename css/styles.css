@@ -6,7 +6,7 @@
 /* Loading spinner */
 .spinner {
   border: 3px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #f97316;
+  border-top-color: #FF5C00;
   border-radius: 50%;
   width: 20px;
   height: 20px;
@@ -15,11 +15,6 @@
 }
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-/* Subtle background glow */
-body {
-  background-image: radial-gradient(circle at 50% 0%, rgba(249, 115, 22, 0.04) 0%, transparent 50%);
 }
 
 /* Player list fade in */
@@ -37,8 +32,8 @@ body {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #f97316;
-  box-shadow: 0 0 8px rgba(249, 115, 22, 0.5);
+  background: #FF5C00;
+  box-shadow: 0 0 8px rgba(255, 92, 0, 0.5);
   transform: translate(-50%, -50%) scale(0);
   animation: dotPop 0.4s ease forwards;
 }
@@ -57,14 +52,14 @@ body {
   50% { opacity: 0.6; }
 }
 
-/* Toast notification — bottom center on mobile */
+/* Toast notification */
 .toast {
   position: fixed;
   bottom: 1.5rem;
   left: 50%;
   transform: translateX(-50%) translateY(100%);
   padding: 0.75rem 1.5rem;
-  border-radius: 0.75rem;
+  border-radius: 0.5rem;
   color: #fff;
   font-weight: 500;
   font-size: 0.875rem;
@@ -81,9 +76,12 @@ body {
 .toast-success { background-color: rgba(22, 163, 74, 0.9); }
 .toast-error { background-color: rgba(220, 38, 38, 0.9); }
 
-/* Input focus glow */
+/* Input focus — clean orange line, no glow */
 input:focus {
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+  box-shadow: none !important;
+  outline: none !important;
+  border-color: #FF5C00 !important;
+  border-width: 1.5px !important;
 }
 
 /* Tap highlight for buttons */
@@ -107,4 +105,90 @@ button, a {
   height: 100%;
   pointer-events: none;
   z-index: 100;
+}
+
+/* Session card ticket border */
+.ticket-border {
+  border-left: 4px solid #FF5C00;
+}
+
+/* Countdown bar */
+.countdown-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 1.25rem;
+}
+.countdown-bar .cd-unit {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+.countdown-bar .cd-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.countdown-bar .cd-label {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #666;
+}
+.countdown-bar .cd-sep {
+  color: #333;
+  font-size: 1.25rem;
+  font-weight: 300;
+}
+
+/* Player list dividers */
+.player-row {
+  padding: 0.625rem 0;
+  border-bottom: 1px solid #1A1A1A;
+}
+.player-row:last-child {
+  border-bottom: none;
+}
+
+/* Hero fluid type */
+.hero-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  font-size: clamp(2.5rem, 10vw, 5.5rem);
+  color: #fff;
+}
+.hero-title .slash {
+  color: #FF5C00;
+}
+
+/* Brand wordmark */
+.wordmark {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 1rem;
+}
+
+/* Section heading style */
+.section-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.6875rem;
+  color: #666;
+}
+
+/* How it works number */
+.step-number {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 2rem;
+  color: #FF5C00;
+  line-height: 1;
 }
