@@ -55,6 +55,11 @@ struct ChatView: View {
                                             reactions: chatService.reactionsByMessage[message.id] ?? [],
                                             currentUserId: currentUserId,
                                             attachmentURL: chatService.publicURL(for: message.attachmentPath),
+                                            avatarDisplayURL: chatService.effectiveAvatarURL(
+                                                for: message,
+                                                currentUserId: currentUserId,
+                                                currentUserProfileAvatar: authService.currentProfile?.avatarUrl
+                                            ),
                                             onAvatarTap: {
                                                 if message.userId != currentUserId {
                                                     tappedProfile = message

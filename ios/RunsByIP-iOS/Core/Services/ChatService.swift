@@ -18,6 +18,8 @@ final class ChatService: ObservableObject {
     private var typingExpiryTask: Task<Void, Never>?
     private var typingExpirations: [String: Date] = [:]
     private var reactionRecords: [MessageReactionRecord] = []
+    /// Populated from `messages_with_profiles`; realtime inserts only include `messages` columns (no avatar).
+    private var avatarURLByUserId: [String: String] = [:]
 
     var currentUserId: String? {
         get async {
@@ -33,11 +35,37 @@ final class ChatService: ObservableObject {
                 .order("created_at", ascending: true)
                 .execute()
                 .value
+            rebuildAvatarCache(from: messages)
 
             try await fetchReactions()
         } catch {
             throw AppError.networkError(error.localizedDescription)
         }
+    }
+
+    /// Avatar for UI: prefer row from view, then cache from last fetch, then current user's loaded profile (realtime rows omit `avatar_url`).
+    func effectiveAvatarURL(for message: ChatMessage, currentUserId: String?, currentUserProfileAvatar: String?) -> String? {
+        if let u = message.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !u.isEmpty {
+            return u
+        }
+        let uid = message.userId.lowercased()
+        if let cached = avatarURLByUserId[uid] { return cached }
+        if let cid = currentUserId?.lowercased(), cid == uid {
+            let p = currentUserProfileAvatar?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !p.isEmpty { return p }
+        }
+        return nil
+    }
+
+    private func rebuildAvatarCache(from messages: [ChatMessage]) {
+        var next: [String: String] = [:]
+        for m in messages {
+            let uid = m.userId.lowercased()
+            if let u = m.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !u.isEmpty {
+                next[uid] = u
+            }
+        }
+        avatarURLByUserId = next
     }
 
     func sendMessage(content: String, photoData: Data? = nil) async throws {

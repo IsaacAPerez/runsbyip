@@ -127,6 +127,7 @@ struct MainTabView: View {
         .tint(Color.appAccentOrange)
         .preferredColorScheme(.dark)
         .task {
+            await authService.loadProfile()
             // Request push notification permission on first authenticated launch
             let status = await notificationService.authorizationStatus()
             if status == .notDetermined {

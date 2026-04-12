@@ -112,11 +112,12 @@ final class AuthService: ObservableObject {
 
     func loadProfile() async {
         guard let userId = currentUser?.id else { return }
+        let idKey = userId.uuidString.lowercased()
         do {
             let profile: UserProfile = try await supabase
                 .from("profiles")
                 .select()
-                .eq("id", value: userId.uuidString)
+                .eq("id", value: idKey)
                 .single()
                 .execute()
                 .value
@@ -129,11 +130,12 @@ final class AuthService: ObservableObject {
 
     func updateProfile(displayName: String, bio: String) async throws {
         guard let userId = currentUser?.id else { return }
+        let idKey = userId.uuidString.lowercased()
         do {
             let updated: UserProfile = try await supabase
                 .from("profiles")
                 .update(["display_name": displayName, "bio": bio])
-                .eq("id", value: userId.uuidString)
+                .eq("id", value: idKey)
                 .select()
                 .single()
                 .execute()

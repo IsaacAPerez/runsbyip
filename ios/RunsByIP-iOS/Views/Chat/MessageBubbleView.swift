@@ -6,12 +6,20 @@ struct MessageBubbleView: View {
     let reactions: [MessageReaction]
     let currentUserId: String?
     let attachmentURL: URL?
+    /// When set, overrides `message.avatarUrl` (realtime inserts only include `messages` columns).
+    var avatarDisplayURL: String? = nil
     var onAvatarTap: (() -> Void)?
     var onReact: (String) -> Void
 
     @State private var showImagePreview = false
 
     private let quickReactions = ["🔥", "😂", "🙌", "👀", "🏀", "💯"]
+
+    private var resolvedAvatarURL: String? {
+        if let u = avatarDisplayURL?.trimmingCharacters(in: .whitespacesAndNewlines), !u.isEmpty { return u }
+        if let u = message.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !u.isEmpty { return u }
+        return nil
+    }
 
     private var relativeTime: String {
         let formatter = ISO8601DateFormatter()
@@ -30,14 +38,14 @@ struct MessageBubbleView: View {
                 bubbleContent(alignment: .trailing)
                 AvatarView(
                     name: message.displayName,
-                    avatarUrl: message.avatarUrl,
+                    avatarUrl: resolvedAvatarURL,
                     size: 32
                 )
             } else {
                 Button(action: { onAvatarTap?() }) {
                     AvatarView(
                         name: message.displayName,
-                        avatarUrl: message.avatarUrl,
+                        avatarUrl: resolvedAvatarURL,
                         size: 32
                     )
                 }
