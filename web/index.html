@@ -62,6 +62,17 @@
 </head>
 <body class="bg-bg text-white min-h-screen font-sans" style="padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);">
 
+  <!-- App Announcement Banner -->
+  <div id="app-banner" class="bg-court-orange/10 border-b border-court-orange/20">
+    <div class="max-w-4xl mx-auto px-5 lg:px-8 py-2.5 flex items-center justify-center gap-3 text-sm">
+      <img src="icons/icon-192.png" alt="" class="w-5 h-5 rounded-md shrink-0">
+      <p class="text-white/90"><span class="font-semibold text-white">RunsByIP for iOS</span> — coming soon to the App Store.</p>
+      <button onclick="document.getElementById('app-banner').remove()" class="text-white/40 hover:text-white ml-1 shrink-0 transition-colors" aria-label="Dismiss">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+  </div>
+
   <!-- Header -->
   <header class="border-b border-surface-light/50 sticky top-0 bg-bg/95 backdrop-blur-sm z-40">
     <div class="max-w-4xl mx-auto px-5 lg:px-8 py-4 flex items-center justify-between">
