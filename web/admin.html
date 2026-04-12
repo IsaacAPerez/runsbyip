@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Admin — RunsByIP</title>
+  <meta name="theme-color" content="#030712">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen font-sans" style="padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);">
+
+  <!-- Header -->
+  <header class="bg-gray-950/95 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-40">
+    <div class="max-w-2xl mx-auto px-5 py-4 flex items-center justify-between">
+      <h1 class="text-lg font-bold">RunsByIP <span class="text-gray-500 font-normal">Admin</span></h1>
+      <div id="header-actions" class="hidden flex items-center gap-5">
+        <a href="index.html" class="text-sm text-gray-400 hover:text-white py-2 transition-colors">Site</a>
+        <button id="logout-btn" class="text-sm text-gray-400 hover:text-white py-2 transition-colors">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-2xl mx-auto px-5 py-6">
+
+    <!-- Login Form -->
+    <div id="login-section" class="max-w-sm mx-auto pt-8">
+      <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+        <h2 class="text-lg font-semibold mb-5 text-center">Admin Login</h2>
+        <form id="login-form" class="space-y-5">
+          <div>
+            <label for="login-email" class="block text-base text-gray-400 mb-2">Email</label>
+            <input type="email" id="login-email" required autocomplete="email"
+              class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+          </div>
+          <div>
+            <label for="login-password" class="block text-base text-gray-400 mb-2">Password</label>
+            <input type="password" id="login-password" required autocomplete="current-password"
+              class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+          </div>
+          <p id="login-error" class="text-red-400 text-sm hidden"></p>
+          <button type="submit" id="login-btn"
+            class="w-full bg-orange-500 active:bg-orange-700 text-white font-bold py-3.5 rounded-xl transition-colors text-base">
+            Log In
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="hidden">
+
+      <!-- Create Session -->
+      <div class="bg-gray-900 rounded-2xl border border-gray-800 p-5 sm:p-6 mb-5">
+        <h2 class="text-lg font-semibold mb-4">Create Session</h2>
+        <form id="create-session-form" class="space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="session-date" class="block text-base text-gray-400 mb-2">Date</label>
+              <input type="date" id="new-session-date" required
+                class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+            </div>
+            <div>
+              <label for="session-time" class="block text-base text-gray-400 mb-2">Time</label>
+              <input type="text" id="new-session-time" value="7:00 PM" required
+                class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+            </div>
+          </div>
+          <div>
+            <label for="session-location" class="block text-base text-gray-400 mb-2">Location</label>
+            <input type="text" id="new-session-location" required placeholder="Gym name & address"
+              class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+          </div>
+          <button type="submit" id="create-session-btn"
+            class="w-full sm:w-auto bg-orange-500 active:bg-orange-700 text-white font-bold px-6 py-3.5 rounded-xl transition-colors text-base">
+            Create Session
+          </button>
+        </form>
+      </div>
+
+      <!-- Sessions List -->
+      <div id="sessions-list" class="space-y-4"></div>
+    </div>
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

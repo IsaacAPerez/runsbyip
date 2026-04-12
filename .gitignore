@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+._*
+
+# iOS / Xcode
+ios/build/
+ios/DerivedData/
+ios/**/xcuserdata/
+ios/**/*.xcuserstate
+ios/**/.swiftpm/
+ios/Pods/
+ios/.build/
+
+# Node / Web
+web/node_modules/
+web/dist/
+web/.next/
+web/.cache/
+web/.parcel-cache/
+
+# Env / secrets
+.env
+.env.*
+!.env.example

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>You're In! — RunsByIP</title>
+  <meta name="theme-color" content="#030712">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-gray-950 text-white min-h-screen flex items-center justify-center font-sans px-5" style="padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);">
+  <canvas id="confetti-canvas"></canvas>
+  <div class="max-w-sm mx-auto text-center relative z-10">
+    <div class="text-7xl mb-6" id="ball-icon">🏀</div>
+    <h1 class="text-3xl font-extrabold mb-2">You're In!</h1>
+    <p class="text-gray-400 text-base mb-8">Payment confirmed. See you on the court.</p>
+    <a href="index.html" class="inline-block w-full bg-gradient-to-r from-orange-500 to-orange-600 active:from-orange-700 active:to-orange-800 text-white font-bold px-6 py-4 rounded-xl transition-all shadow-lg shadow-orange-500/20 text-lg">
+      Back to Session
+    </a>
+  </div>
+  <script>
+    // Confetti animation
+    const canvas = document.getElementById('confetti-canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const colors = ['#f97316', '#fb923c', '#fdba74', '#22c55e', '#3b82f6', '#eab308', '#ffffff'];
+    const pieces = [];
+
+    for (let i = 0; i < 120; i++) {
+      pieces.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height - canvas.height,
+        w: Math.random() * 10 + 5,
+        h: Math.random() * 6 + 3,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        vy: Math.random() * 3 + 2,
+        vx: Math.random() * 2 - 1,
+        rot: Math.random() * 360,
+        rotSpeed: Math.random() * 6 - 3,
+        opacity: 1,
+      });
+    }
+
+    let frame = 0;
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      frame++;
+
+      let active = false;
+      pieces.forEach(p => {
+        if (p.opacity <= 0) return;
+        active = true;
+
+        p.y += p.vy;
+        p.x += p.vx;
+        p.rot += p.rotSpeed;
+        p.vy += 0.04;
+
+        // Fade out after reaching bottom half
+        if (p.y > canvas.height * 0.7) {
+          p.opacity -= 0.015;
+        }
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate((p.rot * Math.PI) / 180);
+        ctx.globalAlpha = Math.max(0, p.opacity);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        ctx.restore();
+      });
+
+      if (active && frame < 300) {
+        requestAnimationFrame(animate);
+      }
+    }
+
+    animate();
+
+    // Handle resize
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+  </script>
+</body>
+</html>
