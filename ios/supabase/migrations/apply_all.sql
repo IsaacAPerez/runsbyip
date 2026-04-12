@@ -162,7 +162,7 @@ CREATE OR REPLACE VIEW messages_with_profiles AS
 SELECT
   m.id,
   m.user_id,
-  p.display_name,
+  COALESCE(p.display_name, m.display_name, '') AS display_name,
   p.avatar_url,
   m.content,
   m.message_type,

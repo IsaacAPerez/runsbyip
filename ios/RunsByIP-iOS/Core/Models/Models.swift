@@ -68,6 +68,39 @@ struct ChatMessage: Codable, Identifiable, Equatable {
         case createdAt = "created_at"
     }
 
+    init(
+        id: String,
+        userId: String,
+        displayName: String,
+        content: String,
+        avatarUrl: String? = nil,
+        messageType: String? = nil,
+        attachmentPath: String? = nil,
+        createdAt: String
+    ) {
+        self.id = id
+        self.userId = userId
+        self.displayName = displayName
+        self.content = content
+        self.avatarUrl = avatarUrl
+        self.messageType = messageType
+        self.attachmentPath = attachmentPath
+        self.createdAt = createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        userId = try c.decode(String.self, forKey: .userId)
+        // View can omit profile row; API may send null — keep decoding resilient.
+        displayName = try c.decodeIfPresent(String.self, forKey: .displayName) ?? ""
+        content = try c.decodeIfPresent(String.self, forKey: .content) ?? ""
+        avatarUrl = try c.decodeIfPresent(String.self, forKey: .avatarUrl)
+        messageType = try c.decodeIfPresent(String.self, forKey: .messageType)
+        attachmentPath = try c.decodeIfPresent(String.self, forKey: .attachmentPath)
+        createdAt = try c.decode(String.self, forKey: .createdAt)
+    }
+
     var normalizedMessageType: String {
         messageType?.lowercased() ?? "text"
     }
