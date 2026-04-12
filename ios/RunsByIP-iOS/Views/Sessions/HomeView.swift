@@ -115,9 +115,14 @@ struct HomeView: View {
             }
             .task {
                 await loadData()
+                sessionService.subscribeToCurrentSession()
             }
             .refreshable {
                 await loadData()
+                sessionService.subscribeToCurrentSession()
+            }
+            .onDisappear {
+                sessionService.unsubscribe()
             }
         }
     }

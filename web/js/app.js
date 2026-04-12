@@ -27,11 +27,6 @@ const paymentError = document.getElementById('payment-error');
 const sessionFullEl = document.getElementById('session-full');
 const checkoutLocked = document.getElementById('checkout-locked');
 const courtDots = document.getElementById('court-dots');
-const waitlistFormSection = document.getElementById('waitlist-form-section');
-const waitlistForm = document.getElementById('waitlist-form');
-const waitlistBtn = document.getElementById('wl-btn');
-const waitlistSection = document.getElementById('waitlist-section');
-const waitlistList = document.getElementById('waitlist-list');
 const weatherWidget = document.getElementById('weather-widget');
 const nameInput = document.getElementById('player-name');
 const emailInput = document.getElementById('player-email');
@@ -376,17 +371,11 @@ async function loadRSVPs() {
     return;
   }
 
-  const { data: waitlisted } = await db
-    .from('public_rsvps')
-    .select('*')
-    .eq('session_id', currentSession.id)
-    .eq('payment_status', 'waitlist');
-
-  updateRSVPDisplay(rsvps || [], waitlisted || []);
+  updateRSVPDisplay(rsvps || []);
 }
 
 // Update RSVP display
-function updateRSVPDisplay(rsvps, waitlisted) {
+function updateRSVPDisplay(rsvps) {
   const count = rsvps.length;
   const max = currentSession.max_players;
   const min = currentSession.min_players;
@@ -400,23 +389,19 @@ function updateRSVPDisplay(rsvps, waitlisted) {
     rsvpMessage.textContent = 'Session is full!';
     checkoutSection.classList.add('hidden');
     checkoutLocked.classList.add('hidden');
-    sessionFullEl.classList.add('hidden');
-    waitlistFormSection.classList.remove('hidden');
+    sessionFullEl.classList.remove('hidden');
     rsvpProgress.className = 'bg-court-orange h-3.5 rounded-full progress-fill';
   } else if (count >= min) {
     rsvpMessage.textContent = `Session confirmed! ${max - count} spot${max - count !== 1 ? 's' : ''} left.`;
     rsvpProgress.className = 'bg-gradient-to-r from-green-500 to-green-400 h-3.5 rounded-full progress-fill';
-    waitlistFormSection.classList.add('hidden');
     updatePaymentsState();
   } else {
     const needed = min - count;
     rsvpMessage.textContent = `${needed} more player${needed !== 1 ? 's' : ''} needed to confirm!`;
     rsvpProgress.className = 'bg-court-orange h-3.5 rounded-full progress-fill';
-    waitlistFormSection.classList.add('hidden');
     updatePaymentsState();
   }
 
-  // Store for team randomizer
   currentRSVPs = rsvps;
   const teamRandomizer = document.getElementById('team-randomizer');
   if (count >= 4) {
@@ -437,24 +422,6 @@ function updateRSVPDisplay(rsvps, waitlisted) {
       ${escapeHtml(rsvp.player_name)}`;
     playerList.appendChild(div);
   });
-
-  if (waitlisted && waitlisted.length > 0) {
-    waitlistSection.classList.remove('hidden');
-    waitlistList.innerHTML = '';
-    waitlisted.forEach((wl, i) => {
-      const div = document.createElement('div');
-      div.className = 'player-item flex items-center gap-2.5 text-sm text-gray-400';
-      div.style.animationDelay = `${i * 0.05}s`;
-      div.innerHTML = `
-        <span class="w-5 h-5 rounded-full bg-yellow-500/15 flex items-center justify-center shrink-0">
-          <svg class="w-3 h-3 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        </span>
-        ${escapeHtml(wl.player_name)}`;
-      waitlistList.appendChild(div);
-    });
-  } else {
-    waitlistSection.classList.add('hidden');
-  }
 }
 
 // Real-time RSVP subscription
@@ -467,33 +434,6 @@ function subscribeToRSVPs() {
     }, () => { loadRSVPs(); })
     .subscribe();
 }
-
-// Waitlist form
-waitlistForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const name = document.getElementById('wl-name').value.trim();
-  const email = document.getElementById('wl-email').value.trim();
-  if (!name || !email) return;
-
-  waitlistBtn.disabled = true;
-  waitlistBtn.innerHTML = '<span class="spinner"></span>';
-
-  try {
-    const response = await db.functions.invoke('join-waitlist', {
-      body: { session_id: currentSession.id, player_name: name, player_email: email },
-    });
-    if (response.error) throw response.error;
-    showToast("You're on the waitlist!", 'success');
-    waitlistForm.reset();
-    await loadRSVPs();
-  } catch (err) {
-    console.error('Waitlist error:', err);
-    showToast(err.message || 'Something went wrong.', 'error');
-  } finally {
-    waitlistBtn.disabled = false;
-    waitlistBtn.textContent = 'Join Waitlist';
-  }
-});
 
 function escapeHtml(str) {
   const div = document.createElement('div');

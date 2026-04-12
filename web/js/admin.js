@@ -208,11 +208,16 @@ createSessionForm.addEventListener('submit', async (e) => {
   const date = document.getElementById('new-session-date').value;
   const time = document.getElementById('new-session-time').value;
   const location = document.getElementById('new-session-location').value;
+  const maxPlayers = parseInt(document.getElementById('new-session-max-players').value, 10);
+  const priceDollars = parseInt(document.getElementById('new-session-price').value, 10);
 
   const { error } = await db.from('sessions').insert({
     date,
     time,
     location,
+    max_players: maxPlayers,
+    price_cents: priceDollars * 100,
+    status: 'open',
   });
 
   if (error) {

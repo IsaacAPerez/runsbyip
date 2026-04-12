@@ -1,5 +1,6 @@
 import Foundation
 @preconcurrency import Supabase
+import Realtime
 
 @MainActor
 final class SessionService: ObservableObject {
@@ -8,6 +9,8 @@ final class SessionService: ObservableObject {
     @Published var currentSessionRSVPCount: Int = 0
 
     private var supabase: SupabaseClient { SupabaseService.shared.client }
+    private var sessionChannel: RealtimeChannelV2?
+    private var rsvpChannel: RealtimeChannelV2?
 
     // MARK: - Sessions
 
@@ -172,6 +175,64 @@ final class SessionService: ObservableObject {
                 .execute()
         } catch {
             throw AppError.networkError(error.localizedDescription)
+        }
+    }
+
+    // MARK: - Real-time Subscriptions
+
+    func subscribeToCurrentSession() {
+        unsubscribe()
+        guard let sessionId = currentSession?.id else { return }
+
+        sessionChannel = supabase.realtimeV2.channel("session-changes")
+        guard let sessionChannel else { return }
+
+        let updates = sessionChannel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "sessions",
+            filter: "id=eq.\(sessionId)"
+        )
+
+        Task { [weak self] in
+            for await update in updates {
+                guard let self else { return }
+                if let session = try? update.decodeRecord(as: GameSession.self) {
+                    self.currentSession = session
+                }
+            }
+        }
+
+        Task { try? await sessionChannel.subscribeWithError() }
+
+        rsvpChannel = supabase.realtimeV2.channel("rsvps-changes")
+        guard let rsvpChannel else { return }
+
+        let rsvpChanges = rsvpChannel.postgresChange(
+            AnyAction.self,
+            schema: "public",
+            table: "rsvps",
+            filter: "session_id=eq.\(sessionId)"
+        )
+
+        Task { [weak self] in
+            for await _ in rsvpChanges {
+                guard let self else { return }
+                if let id = self.currentSession?.id {
+                    self.currentSessionRSVPCount = (try? await self.fetchPaidRSVPCount(for: id)) ?? self.currentSessionRSVPCount
+                }
+            }
+        }
+
+        Task { try? await rsvpChannel.subscribeWithError() }
+    }
+
+    func unsubscribe() {
+        Task {
+            await sessionChannel?.unsubscribe()
+            await rsvpChannel?.unsubscribe()
+            sessionChannel = nil
+            rsvpChannel = nil
         }
     }
 
