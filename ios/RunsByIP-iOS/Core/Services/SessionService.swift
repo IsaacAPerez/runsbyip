@@ -9,6 +9,7 @@ final class SessionService: ObservableObject {
     @Published var currentSessionRSVPCount: Int = 0
 
     private var supabase: SupabaseClient { SupabaseService.shared.client }
+    private let jsonDecoder = JSONDecoder()
     private var sessionChannel: RealtimeChannelV2?
     private var rsvpChannel: RealtimeChannelV2?
 
@@ -187,17 +188,13 @@ final class SessionService: ObservableObject {
         sessionChannel = supabase.realtimeV2.channel("session-changes")
         guard let sessionChannel else { return }
 
-        let updates = sessionChannel.postgresChange(
-            UpdateAction.self,
-            schema: "public",
-            table: "sessions",
-            filter: "id=eq.\(sessionId)"
-        )
+        let updates = sessionChannel.postgresChange(UpdateAction.self, table: "sessions")
 
         Task { [weak self] in
             for await update in updates {
                 guard let self else { return }
-                if let session = try? update.decodeRecord(as: GameSession.self) {
+                if let session = try? update.decodeRecord(as: GameSession.self, decoder: jsonDecoder),
+                   session.id == sessionId {
                     self.currentSession = session
                 }
             }
@@ -208,19 +205,20 @@ final class SessionService: ObservableObject {
         rsvpChannel = supabase.realtimeV2.channel("rsvps-changes")
         guard let rsvpChannel else { return }
 
-        let rsvpChanges = rsvpChannel.postgresChange(
-            AnyAction.self,
-            schema: "public",
-            table: "rsvps",
-            filter: "session_id=eq.\(sessionId)"
-        )
+        let rsvpInserts = rsvpChannel.postgresChange(InsertAction.self, table: "rsvps")
+        let rsvpUpdates = rsvpChannel.postgresChange(UpdateAction.self, table: "rsvps")
 
         Task { [weak self] in
-            for await _ in rsvpChanges {
-                guard let self else { return }
-                if let id = self.currentSession?.id {
-                    self.currentSessionRSVPCount = (try? await self.fetchPaidRSVPCount(for: id)) ?? self.currentSessionRSVPCount
-                }
+            for await _ in rsvpInserts {
+                guard let self, let id = self.currentSession?.id else { continue }
+                self.currentSessionRSVPCount = (try? await self.fetchPaidRSVPCount(for: id)) ?? self.currentSessionRSVPCount
+            }
+        }
+
+        Task { [weak self] in
+            for await _ in rsvpUpdates {
+                guard let self, let id = self.currentSession?.id else { continue }
+                self.currentSessionRSVPCount = (try? await self.fetchPaidRSVPCount(for: id)) ?? self.currentSessionRSVPCount
             }
         }
 
