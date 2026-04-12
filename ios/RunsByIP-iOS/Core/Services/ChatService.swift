@@ -424,4 +424,25 @@ final class ChatService: ObservableObject {
         expiredIds.forEach { typingExpirations[$0] = nil }
         typingUsers.removeAll { expiredIds.contains($0.id) }
     }
+
+    // MARK: - Gallery
+
+    private let galleryBucket = "gallery"
+
+    func fetchGalleryPhotos() async throws -> [URL] {
+        let files = try await supabase.storage.from(galleryBucket).list()
+        return files.compactMap { file in
+            guard !file.name.hasPrefix(".") else { return nil }
+            return try? supabase.storage.from(galleryBucket).getPublicURL(path: file.name)
+        }
+    }
+
+    func uploadGalleryPhoto(data: Data) async throws {
+        let filename = "\(UUID().uuidString.lowercased()).jpg"
+        try await supabase.storage.from(galleryBucket).upload(filename, data: data, options: .init(contentType: "image/jpeg"))
+    }
+
+    func deleteGalleryPhoto(path: String) async throws {
+        try await supabase.storage.from(galleryBucket).remove(paths: [path])
+    }
 }

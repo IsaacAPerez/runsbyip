@@ -10,7 +10,9 @@
 		099336751B766B786D7D2F46 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C610DD78757AB371ABEEA52 /* OnboardingView.swift */; };
 		0D7E00455228840F86B5BA3D /* README-plist.md in Resources */ = {isa = PBXBuildFile; fileRef = 543E6EAA4D65247D144D4B7D /* README-plist.md */; };
 		0DFD6F86AF2E340317F00ABF /* View+Loading.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1959B9DD9898C2D0992E4C32 /* View+Loading.swift */; };
+		120FC76EB37375129BBC72A6 /* HeroGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 673C3C19F5026DCFBED6EC53 /* HeroGalleryView.swift */; };
 		12EDF86DD545DB94805533A3 /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AA9BBCC60CC667796CD7259 /* SessionDetailView.swift */; };
+		149FFF00040F9F9944F49D0D /* AdminGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2A48F7177813286AA503B5 /* AdminGalleryView.swift */; };
 		1702DE6918D89792085A7411 /* Date+Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 838386B173F360CAF3CC7CAA /* Date+Formatting.swift */; };
 		1BAEA13EA1D2BBE1CF691DAF /* CountdownCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A598E8866CED905A359F91C6 /* CountdownCard.swift */; };
 		20687000ECDA757585333628 /* RunsByIPApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AEFA87777347DFE3EFDCBF /* RunsByIPApp.swift */; };
@@ -74,6 +76,7 @@
 		5DC080BD2EB8A02CB6C7AADE /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		5F723FD1ED7860429B8A3408 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		669D9E491AB4419C6A09F6E4 /* FontPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontPreviewView.swift; sourceTree = "<group>"; };
+		673C3C19F5026DCFBED6EC53 /* HeroGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroGalleryView.swift; sourceTree = "<group>"; };
 		74D0282577862295C4ADBBC8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		77ADD25B91F739EF15F9C016 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		79C52B74D961BCB7F025F62A /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
@@ -88,6 +91,7 @@
 		A2288F02C3A84CFF10317947 /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
 		A277CB45FC2E49584A44076B /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
 		A598E8866CED905A359F91C6 /* CountdownCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CountdownCard.swift; sourceTree = "<group>"; };
+		AC2A48F7177813286AA503B5 /* AdminGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminGalleryView.swift; sourceTree = "<group>"; };
 		AF1BBD65290987B17BA0B9C9 /* CreateSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateSessionView.swift; sourceTree = "<group>"; };
 		B26F343A9BE1B746165E8822 /* SessionsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsListView.swift; sourceTree = "<group>"; };
 		B3125BABB939048E525C4B23 /* PaymentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentService.swift; sourceTree = "<group>"; };
@@ -154,6 +158,7 @@
 				E4EF9200262867E62FD9389F /* AvatarView.swift */,
 				971EA2DE800BBBAEE983057A /* BadgeView.swift */,
 				5636799E22A4668CBFAFA58E /* EmptyStateView.swift */,
+				673C3C19F5026DCFBED6EC53 /* HeroGalleryView.swift */,
 				115356677835FDBFB28A9EFC /* LoadingView.swift */,
 				2760C0801B49CA903B4BE693 /* PlayerRowView.swift */,
 				45E7AE55CEFCC4CA740124D5 /* ToastView.swift */,
@@ -223,6 +228,7 @@
 			isa = PBXGroup;
 			children = (
 				FBAEDFE3DFDB6B1E5ABA9259 /* AdminDashboardView.swift */,
+				AC2A48F7177813286AA503B5 /* AdminGalleryView.swift */,
 				B8E942A3F945820D0DEF635A /* AdminRSVPView.swift */,
 				A1F2460D263FA83CFA5FDE02 /* ColorPreviewView.swift */,
 				AF1BBD65290987B17BA0B9C9 /* CreateSessionView.swift */,
@@ -381,6 +387,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7DBC6E7808DD4203F1B18E62 /* AdminDashboardView.swift in Sources */,
+				149FFF00040F9F9944F49D0D /* AdminGalleryView.swift in Sources */,
 				353B6F815E6EA5AA13E03639 /* AdminRSVPView.swift in Sources */,
 				B5ED8AEB603EE98DC17B4C25 /* AppDelegate.swift in Sources */,
 				C0B0D27D3124D46E4A006897 /* AppRouter.swift in Sources */,
@@ -398,6 +405,7 @@
 				1702DE6918D89792085A7411 /* Date+Formatting.swift in Sources */,
 				C8B5EDAC68DDFBABD9B3642D /* EmptyStateView.swift in Sources */,
 				875FD4334154C92FBBF0D787 /* FontPreviewView.swift in Sources */,
+				120FC76EB37375129BBC72A6 /* HeroGalleryView.swift in Sources */,
 				96E1CBFBDE600DBFE1FA7059 /* HomeView.swift in Sources */,
 				21C09C78424CBDB36C554E12 /* LoadingView.swift in Sources */,
 				2A189E42AFE461CCBF71A224 /* LoginView.swift in Sources */,

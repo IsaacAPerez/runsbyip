@@ -100,7 +100,7 @@ struct CountdownCard: View {
 
 // MARK: - Countdown Unit
 
-private struct CountdownCardUnit: View {
+struct CountdownCardUnit: View {
     let value: Int
     let label: String
 
@@ -122,7 +122,7 @@ private struct CountdownCardUnit: View {
 
 // MARK: - Live Badge
 
-private struct LiveBadge: View {
+struct LiveBadge: View {
     @State private var isPulsing = false
 
     var body: some View {

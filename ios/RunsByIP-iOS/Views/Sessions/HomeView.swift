@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var sessionService: SessionService
+    @EnvironmentObject var chatService: ChatService
     @EnvironmentObject var navigationCoordinator: NavigationCoordinator
     @EnvironmentObject var powService: POWService
 
@@ -12,6 +13,8 @@ struct HomeView: View {
     @State private var showRSVP = false
     @State private var showAllRuns = false
     @State private var leaderboard: [LeaderboardEntry] = []
+    @State private var galleryURLs: [URL] = []
+    @State private var sessionForRSVP: GameSession?
 
     private var currentSession: GameSession? {
         sessionService.currentSession
@@ -41,43 +44,41 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .top) {
                 Color.appBackground
                     .ignoresSafeArea()
+
+                // Hero gallery pinned behind scroll content
+                if !galleryURLs.isEmpty {
+                    HeroGalleryView(urls: galleryURLs)
+                        .ignoresSafeArea(edges: .top)
+                }
 
                 if isLoading {
                     LoadingView(message: "Loading home...")
                 } else {
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 20) {
+                            // Header overlay on top of hero
                             HomeHeader(
                                 firstName: firstName,
                                 hasUpcomingSession: currentSession != nil,
                                 onBrowseRuns: { showAllRuns = true }
                             )
+                            .padding(.top, 280)
 
-                            // Countdown Card
-                            if let session = currentSession {
-                                CountdownCard(session: session)
-                            } else {
-                                EmptyCountdownCard()
-                            }
-
-                            // Next Run Details Card
                             if let session = currentSession {
                                 NextRunCard(
                                     session: session,
                                     confirmedCount: confirmedCount,
                                     onRSVP: {
                                         guard !session.isFull(using: confirmedCount) else { return }
+                                        sessionForRSVP = session
                                         showRSVP = true
                                     }
                                 )
-
-                                HomeStatusStrip(
-                                    session: session,
-                                    confirmedCount: confirmedCount
-                                )
+                            } else {
+                                EmptyCountdownCard()
                             }
 
                             // Player of the Week
@@ -106,9 +107,17 @@ struct HomeView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showRSVP) {
-                if let session = currentSession {
+            .sheet(isPresented: $showRSVP, onDismiss: {
+                sessionService.subscribeToCurrentSession()
+            }) {
+                if let session = sessionForRSVP {
                     RSVPView(session: session)
+                        .transaction { $0.animation = nil }
+                }
+            }
+            .onChange(of: showRSVP) { _, isPresented in
+                if isPresented {
+                    sessionService.unsubscribe()
                 }
             }
             .navigationDestination(isPresented: $showAllRuns) {
@@ -134,6 +143,7 @@ struct HomeView: View {
         do {
             try await sessionService.fetchCurrentSession()
             try await powService.fetchCurrentPoll()
+            galleryURLs = (try? await chatService.fetchGalleryPhotos()) ?? []
             if currentSession == nil {
                 leaderboard = try await sessionService.fetchLeaderboard()
             }
@@ -198,12 +208,9 @@ private struct NextRunCard: View {
         max(session.maxPlayers - confirmedCount, 0)
     }
 
-    private var locationLine: String {
-        session.location
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            // Header
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("NEXT RUN")
@@ -222,12 +229,17 @@ private struct NextRunCard: View {
                 BadgeView.forStatus(session.status)
             }
 
+            // Countdown — isolated via TimelineView, won't invalidate parent
+            CountdownSection(session: session)
+
+            // Details
             VStack(alignment: .leading, spacing: 12) {
                 DetailRow(systemImage: "clock.fill", title: session.time)
-                DetailRow(systemImage: "mappin.and.ellipse", title: locationLine)
+                DetailRow(systemImage: "mappin.and.ellipse", title: session.location)
                 DetailRow(systemImage: "creditcard.fill", title: session.priceDisplay)
             }
 
+            // Spots
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Spots")
@@ -262,6 +274,7 @@ private struct NextRunCard: View {
                     .foregroundColor(.appTextSecondary)
             }
 
+            // CTA
             Button(action: onRSVP) {
                 Text(spotsLeft == 0 ? "RUN IS FULL" : (session.paymentsOpen ? "RSVP & PAY \(session.priceDisplay)" : "LOCK IN"))
                     .font(.system(size: 15, weight: .black))
@@ -285,44 +298,43 @@ private struct NextRunCard: View {
     }
 }
 
-private struct HomeStatusStrip: View {
+// Isolated countdown — TimelineView only invalidates itself, not the parent
+private struct CountdownSection: View {
     let session: GameSession
-    let confirmedCount: Int
-
-    private var spotsLeft: Int {
-        max(session.maxPlayers - confirmedCount, 0)
-    }
 
     var body: some View {
-        HStack(spacing: 12) {
-            StatusPill(title: "STATUS", value: session.status.capitalized)
-            StatusPill(title: "LEFT", value: "\(spotsLeft)")
-            StatusPill(title: "PRICE", value: session.priceDisplay)
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let now = context.date
+            let isLive: Bool = {
+                guard let start = session.sessionDateTime else { return false }
+                let elapsed = now.timeIntervalSince(start)
+                return elapsed >= 0 && elapsed < 7200
+            }()
+
+            if isLive {
+                Text("HAPPENING NOW")
+                    .font(.system(size: 22, weight: .black).width(.condensed))
+                    .foregroundColor(.appAccentOrange)
+            } else if let target = session.sessionDateTime {
+                let remaining = target.timeIntervalSince(now)
+                if remaining > 0 {
+                    let total = Int(remaining)
+                    let d = total / 86400
+                    let h = (total % 86400) / 3600
+                    let m = (total % 3600) / 60
+                    let s = total % 60
+
+                    HStack(spacing: 4) {
+                        if d > 0 {
+                            CountdownCardUnit(value: d, label: "d")
+                        }
+                        CountdownCardUnit(value: h, label: "h")
+                        CountdownCardUnit(value: m, label: "m")
+                        CountdownCardUnit(value: s, label: "s")
+                    }
+                }
+            }
         }
-    }
-}
-
-private struct StatusPill: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(1.1)
-                .foregroundColor(.appTextSecondary)
-
-            Text(value)
-                .font(.system(size: 17, weight: .bold).width(.condensed))
-                .foregroundColor(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(Color.appSurfaceElevated, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 

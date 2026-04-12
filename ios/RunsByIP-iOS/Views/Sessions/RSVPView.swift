@@ -7,17 +7,23 @@ import UIKit
 struct RSVPView: View {
     @EnvironmentObject var sessionService: SessionService
     @EnvironmentObject var paymentService: PaymentService
+    @EnvironmentObject var authService: AuthService
     @Environment(\.dismiss) var dismiss
 
     let session: GameSession
 
-    @State private var playerName = ""
-    @State private var email = ""
+    private var playerName: String {
+        authService.currentProfile?.displayName ?? "Player"
+    }
+    private var email: String {
+        authService.currentProfile?.email ?? ""
+    }
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var cardState = CardEntryState()
     @State private var showApplePaySheet = false
     @State private var confirmedCount = 0
+    @State private var loadingMethod: String?
 
     private var shortDate: String {
         guard let parsed = session.parsedDate else { return session.date }
@@ -27,7 +33,7 @@ struct RSVPView: View {
     }
 
     private var isFormValid: Bool {
-        playerName.isValidDisplayName && email.isValidEmail && cardState.isComplete
+        cardState.isComplete
     }
 
     private var isSessionFull: Bool {
@@ -52,6 +58,7 @@ struct RSVPView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.top, 8)
+                        .id("top")
 
                         VStack(spacing: 0) {
                             SummaryRow(label: "Location", value: session.location)
@@ -75,12 +82,10 @@ struct RSVPView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                         } else if session.paymentsOpen {
-                            playerDetailsSection
+                            // Express payment methods
+                            expressPaymentSection
 
-                            if paymentService.isApplePayAvailable {
-                                applePaySection
-                                orDivider
-                            }
+                            paymentDivider(text: "or pay with card")
 
                             paymentSection
                             checkoutFooter
@@ -130,6 +135,7 @@ struct RSVPView: View {
 
                                 HStack(spacing: 8) {
                                     PulsingDot()
+                                        .frame(width: 18, height: 18)
                                     Text("Waiting for drop")
                                         .font(.subheadline.bold())
                                         .foregroundColor(.appAccentOrange)
@@ -158,6 +164,7 @@ struct RSVPView: View {
                 }
             }
             .onChange(of: paymentService.paymentResult) { _, result in
+                loadingMethod = nil
                 guard let result else { return }
                 switch result {
                 case .success:
@@ -178,60 +185,103 @@ struct RSVPView: View {
         }
     }
 
-    private var applePaySection: some View {
-        VStack(spacing: 12) {
-            ApplePayButton(type: .buy, style: .white) {
-                guard playerName.isValidDisplayName, email.isValidEmail else { return }
-                continueWithApplePay()
+    private var expressPaymentSection: some View {
+        VStack(spacing: 10) {
+            Text("EXPRESS CHECKOUT")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(1.4)
+                .foregroundColor(.appTextSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Apple Pay
+            if paymentService.isApplePayAvailable {
+                if loadingMethod == "applePay" {
+                    expressLoadingButton(bgColor: .white, fgColor: .black)
+                } else {
+                    ApplePayButton(type: .buy, style: .white) {
+                        guard hasValidIdentity else { return }
+                        loadingMethod = "applePay"
+                        continueWithApplePay()
+                    }
+                    .frame(height: 48)
+                    .cornerRadius(12)
+                    .allowsHitTesting(loadingMethod == nil && hasValidIdentity)
+                    .opacity(loadingMethod != nil && loadingMethod != "applePay" ? 0.4 : 1)
+                }
             }
-            .frame(height: 50)
-            .cornerRadius(12)
-            .allowsHitTesting(!isLoading && !paymentService.isProcessing && playerName.isValidDisplayName && email.isValidEmail)
-            .opacity(!playerName.isValidDisplayName || !email.isValidEmail ? 0.4 : 1)
+
+            // Link
+            ExpressMethodButton(
+                label: "Pay with Link",
+                icon: "link",
+                bgColor: Color(hex: "00D66F"),
+                fgColor: .white,
+                isLoading: loadingMethod == "link"
+            ) {
+                loadingMethod = "link"
+                confirmWithMethod(.link)
+            }
+            .disabled(loadingMethod != nil || !hasValidIdentity)
+            .opacity(loadingMethod != nil && loadingMethod != "link" ? 0.4 : 1)
+
+            HStack(spacing: 10) {
+                // Afterpay
+                ExpressMethodButton(
+                    label: "Afterpay",
+                    icon: "cart.fill",
+                    bgColor: Color(hex: "B2FCE4"),
+                    fgColor: .black,
+                    isLoading: loadingMethod == "afterpay"
+                ) {
+                    loadingMethod = "afterpay"
+                    confirmWithMethod(.afterpayClearpay)
+                }
+                .disabled(loadingMethod != nil || !hasValidIdentity)
+                .opacity(loadingMethod != nil && loadingMethod != "afterpay" ? 0.4 : 1)
+
+                // Klarna
+                ExpressMethodButton(
+                    label: "Klarna",
+                    icon: "k.circle.fill",
+                    bgColor: Color(hex: "FFB3C7"),
+                    fgColor: .black,
+                    isLoading: loadingMethod == "klarna"
+                ) {
+                    loadingMethod = "klarna"
+                    confirmWithMethod(.klarna)
+                }
+                .disabled(loadingMethod != nil || !hasValidIdentity)
+                .opacity(loadingMethod != nil && loadingMethod != "klarna" ? 0.4 : 1)
+            }
         }
     }
 
-    private var orDivider: some View {
+    private func expressLoadingButton(bgColor: Color, fgColor: Color) -> some View {
+        HStack {
+            ProgressView().tint(fgColor).scaleEffect(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 48)
+        .background(bgColor)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var hasValidIdentity: Bool {
+        !playerName.isEmpty && !email.isEmpty
+    }
+
+    private func paymentDivider(text: String) -> some View {
         HStack(spacing: 12) {
             Rectangle()
                 .fill(Color.appBorder)
                 .frame(height: 1)
-            Text("or pay with card")
+            Text(text)
                 .font(.caption)
                 .foregroundColor(.appTextSecondary)
                 .layoutPriority(1)
             Rectangle()
                 .fill(Color.appBorder)
                 .frame(height: 1)
-        }
-    }
-
-    private var playerDetailsSection: some View {
-        VStack(spacing: 24) {
-            VStack(alignment: .leading, spacing: 0) {
-                TextField("Your Name", text: $playerName)
-                    .textFieldStyle(.plain)
-                    .foregroundColor(.white)
-                    .textContentType(.name)
-                    .padding(.bottom, 8)
-                Rectangle()
-                    .fill(Color.appBorder)
-                    .frame(height: 1)
-            }
-
-            VStack(alignment: .leading, spacing: 0) {
-                TextField("Email", text: $email)
-                    .textFieldStyle(.plain)
-                    .foregroundColor(.white)
-                    .textContentType(.emailAddress)
-                    .keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .padding(.bottom, 8)
-                Rectangle()
-                    .fill(Color.appBorder)
-                    .frame(height: 1)
-            }
         }
     }
 
@@ -318,7 +368,7 @@ struct RSVPView: View {
     }
 
     private func continueWithApplePay() {
-        guard playerName.isValidDisplayName, email.isValidEmail else { return }
+        guard hasValidIdentity else { return }
         guard !isSessionFull else {
             errorMessage = "This run is full. Checkout is no longer available."
             return
@@ -369,6 +419,7 @@ struct RSVPView: View {
                 errorMessage = error.localizedDescription
             }
             isLoading = false
+            loadingMethod = nil
         }
     }
 
@@ -403,6 +454,61 @@ struct RSVPView: View {
                 errorMessage = error.localizedDescription
             }
             isLoading = false
+        }
+    }
+
+    private func confirmWithMethod(_ type: STPPaymentMethodType) {
+        guard hasValidIdentity, !isSessionFull else {
+            if isSessionFull { errorMessage = "This run is full." }
+            return
+        }
+
+        isLoading = true
+        errorMessage = nil
+        paymentService.resetCheckoutState()
+
+        let billingDetails = STPPaymentMethodBillingDetails()
+        billingDetails.name = playerName
+        billingDetails.email = email
+
+        let params = STPPaymentMethodParams()
+        params.billingDetails = billingDetails
+        switch type {
+        case .link:
+            params.type = .link
+            params.link = STPPaymentMethodLinkParams()
+        case .afterpayClearpay:
+            params.type = .afterpayClearpay
+            params.afterpayClearpay = STPPaymentMethodAfterpayClearpayParams()
+        case .klarna:
+            params.type = .klarna
+            params.klarna = STPPaymentMethodKlarnaParams()
+        default:
+            isLoading = false
+            loadingMethod = nil
+            return
+        }
+
+        let authContext = PaymentAuthenticationContext()
+
+        Task {
+            do {
+                let clientSecret = try await sessionService.createCheckout(
+                    sessionId: session.id,
+                    playerName: playerName,
+                    playerEmail: email
+                )
+
+                await paymentService.confirmPayment(
+                    clientSecret: clientSecret,
+                    paymentMethodParams: params,
+                    authenticationContext: authContext
+                )
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isLoading = false
+            loadingMethod = nil
         }
     }
 
@@ -755,26 +861,71 @@ private struct PaymentPill: View {
     }
 }
 
-private struct PulsingDot: View {
-    @State private var pulsing = false
+private struct ExpressMethodButton: View {
+    let label: String
+    let icon: String
+    let bgColor: Color
+    let fgColor: Color
+    var isLoading: Bool = false
+    let action: () -> Void
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color.appAccentOrange.opacity(0.4))
-                .frame(width: 10, height: 10)
-                .scaleEffect(pulsing ? 1.8 : 1)
-                .opacity(pulsing ? 0 : 0.75)
-            Circle()
-                .fill(Color.appAccentOrange)
-                .frame(width: 10, height: 10)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: false)) {
-                pulsing = true
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if isLoading {
+                    ProgressView().tint(fgColor).scaleEffect(0.8)
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .bold))
+                    Text(label)
+                        .font(.system(size: 15, weight: .bold))
+                }
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(bgColor)
+            .foregroundColor(fgColor)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
+        .buttonStyle(.plain)
     }
+}
+
+private struct PulsingDot: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: 18, height: 18))
+        container.backgroundColor = .clear
+
+        let pulseLayer = CALayer()
+        pulseLayer.bounds = CGRect(x: 0, y: 0, width: 10, height: 10)
+        pulseLayer.position = CGPoint(x: 9, y: 9)
+        pulseLayer.cornerRadius = 5
+        pulseLayer.backgroundColor = UIColor(Color.appAccentOrange).withAlphaComponent(0.4).cgColor
+        container.layer.addSublayer(pulseLayer)
+
+        let dotLayer = CALayer()
+        dotLayer.bounds = CGRect(x: 0, y: 0, width: 10, height: 10)
+        dotLayer.position = CGPoint(x: 9, y: 9)
+        dotLayer.cornerRadius = 5
+        dotLayer.backgroundColor = UIColor(Color.appAccentOrange).cgColor
+        container.layer.addSublayer(dotLayer)
+
+        let scale = CABasicAnimation(keyPath: "transform.scale")
+        scale.fromValue = 1.0
+        scale.toValue = 1.8
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 0.75
+        fade.toValue = 0.0
+        let group = CAAnimationGroup()
+        group.animations = [scale, fade]
+        group.duration = 1.2
+        group.repeatCount = .infinity
+        pulseLayer.add(group, forKey: "pulse")
+
+        return container
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {}
 }
 
 private struct SummaryRow: View {
@@ -833,4 +984,5 @@ private extension Substring {
     ))
     .environmentObject(SessionService())
     .environmentObject(PaymentService())
+    .environmentObject(AuthService())
 }

@@ -68,6 +68,8 @@ targets:
         aps-environment: development
         com.apple.developer.associated-domains:
           - applinks:runsbyip.com
+        com.apple.developer.in-app-payments:
+          - merchant.com.isaacperez.runsbyip
     dependencies:
       - package: supabase-swift
         product: Supabase

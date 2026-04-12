@@ -8,5 +8,9 @@
 	<array>
 		<string>applinks:runsbyip.com</string>
 	</array>
+	<key>com.apple.developer.in-app-payments</key>
+	<array>
+		<string>merchant.com.isaacperez.runsbyip</string>
+	</array>
 </dict>
 </plist>

@@ -9,6 +9,7 @@ struct OnboardingView: View {
     @State private var notificationGranted = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var pendingImage: UIImage?
+    @State private var displayName = ""
     @State private var bio = ""
     @State private var isSaving = false
     @State private var profileError: String?
@@ -241,6 +242,21 @@ struct OnboardingView: View {
                         }
                     }
 
+                    // Name field (required)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Display Name")
+                            .font(.appCaption)
+                            .foregroundColor(.appTextSecondary)
+
+                        TextField("Your name", text: $displayName)
+                            .foregroundColor(.white)
+                            .textContentType(.name)
+                            .padding(14)
+                            .background(Color.appSurfaceElevated)
+                            .clipShape(RoundedRectangle(cornerRadius: AppStyle.buttonCornerRadius, style: .continuous))
+                    }
+                    .padding(.horizontal, AppSpacing.space8)
+
                     // Bio field
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
@@ -303,7 +319,8 @@ struct OnboardingView: View {
                     .clipShape(RoundedRectangle(cornerRadius: AppStyle.buttonCornerRadius, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .disabled(isSaving)
+                .disabled(isSaving || displayName.trimmingCharacters(in: .whitespaces).isEmpty)
+                .opacity(displayName.trimmingCharacters(in: .whitespaces).isEmpty ? 0.4 : 1)
 
                 Button {
                     withAnimation { currentPage = 4 }
@@ -316,6 +333,13 @@ struct OnboardingView: View {
             }
             .padding(.horizontal, AppSpacing.space24)
             .padding(.bottom, 40)
+        }
+        .onAppear {
+            if displayName.isEmpty {
+                displayName = authService.currentProfile?.displayName
+                    ?? authService.currentUser?.userMetadata["display_name"]?.stringValue
+                    ?? ""
+            }
         }
         .onChange(of: selectedPhoto) { _, item in
             guard let item else { return }
@@ -383,13 +407,9 @@ struct OnboardingView: View {
                     pendingImage = nil
                 }
 
+                let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
                 let trimmedBio = bio.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmedBio.isEmpty {
-                    let name = authService.currentProfile?.displayName
-                        ?? authService.currentUser?.userMetadata["display_name"]?.stringValue
-                        ?? "Player"
-                    try await authService.updateProfile(displayName: name, bio: trimmedBio)
-                }
+                try await authService.updateProfile(displayName: trimmedName, bio: trimmedBio)
 
                 withAnimation { currentPage = 4 }
             } catch {

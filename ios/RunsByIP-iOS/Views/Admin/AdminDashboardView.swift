@@ -4,6 +4,7 @@ import SwiftUI
 struct AdminDashboardView: View {
     @EnvironmentObject var sessionService: SessionService
     @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var chatService: ChatService
 
     @State private var rsvpCounts: [String: Int] = [:]
     @State private var isLoading = true
@@ -56,6 +57,28 @@ struct AdminDashboardView: View {
                                 .background(Color.appAccentOrange)
                                 .foregroundColor(.appBackground)
                                 .cornerRadius(AppStyle.buttonCornerRadius)
+                            }
+                            .padding(.horizontal)
+
+                            // Gallery
+                            NavigationLink {
+                                AdminGalleryView()
+                                    .environmentObject(chatService)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "photo.on.rectangle.angled")
+                                    Text("Manage Gallery")
+                                        .fontWeight(.semibold)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Color.appSurfaceElevated)
+                                .foregroundColor(.white)
+                                .cornerRadius(AppStyle.buttonCornerRadius)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: AppStyle.buttonCornerRadius)
+                                        .stroke(Color.appBorder, lineWidth: 1)
+                                )
                             }
                             .padding(.horizontal)
 
@@ -238,12 +261,21 @@ struct AdminDashboardView: View {
                                     .padding(.horizontal)
 
                                 ForEach(sessionService.sessions) { session in
-                                    NavigationLink(destination: AdminRSVPView(session: session)) {
-                                        AdminSessionRow(
-                                            session: session,
-                                            rsvpCount: rsvpCounts[session.id] ?? 0
-                                        )
-                                    }
+                                    AdminSessionRow(
+                                        session: session,
+                                        rsvpCount: rsvpCounts[session.id] ?? 0,
+                                        onStatusChange: { newStatus in
+                                            updateStatus(session: session, status: newStatus)
+                                        },
+                                        onTogglePayments: {
+                                            togglePayments(session: session)
+                                        }
+                                    )
+                                    .background(
+                                        NavigationLink(destination: AdminRSVPView(session: session)) {
+                                            EmptyView()
+                                        }.opacity(0)
+                                    )
                                     .padding(.horizontal)
                                 }
                             }
@@ -285,11 +317,23 @@ struct AdminDashboardView: View {
         isLoading = false
     }
 
+    private func updateStatus(session: GameSession, status: String) {
+        Task {
+            do {
+                try await sessionService.updateSessionStatus(id: session.id, status: status)
+                showToast("Session \(status)")
+            } catch {
+                showToast("Failed to update status")
+            }
+        }
+    }
+
     private func togglePayments(session: GameSession) {
         isTogglingPayments = true
         Task {
             do {
                 try await sessionService.togglePayments(sessionId: session.id, open: !session.paymentsOpen)
+                try await sessionService.fetchAllSessions()
                 try await sessionService.fetchCurrentSession()
                 showToast("Payments \(session.paymentsOpen ? "closed" : "opened")")
             } catch {
@@ -489,26 +533,80 @@ struct StatCard: View {
 struct AdminSessionRow: View {
     let session: GameSession
     let rsvpCount: Int
+    var onStatusChange: ((String) -> Void)?
+    var onTogglePayments: (() -> Void)?
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(session.formattedShortDate)
-                    .font(.subheadline.bold())
-                    .foregroundColor(.white)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(session.formattedShortDate)
+                        .font(.subheadline.bold())
+                        .foregroundColor(.white)
 
-                Text("\(rsvpCount)/\(session.maxPlayers) players")
+                    Text("\(rsvpCount)/\(session.maxPlayers) players")
+                        .font(.caption)
+                        .foregroundColor(.appTextSecondary)
+                }
+
+                Spacer()
+
+                BadgeView.forStatus(session.status)
+
+                Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundColor(.appTextSecondary)
+                    .foregroundColor(.appTextTertiary)
             }
 
-            Spacer()
+            if onStatusChange != nil {
+                HStack(spacing: 8) {
+                    // Status controls
+                    AdminRowPill(
+                        label: "Open",
+                        isActive: session.status == "open",
+                        activeColor: .appSuccess
+                    ) {
+                        if session.status != "open" { onStatusChange?("open") }
+                    }
 
-            BadgeView.forStatus(session.status)
+                    AdminRowPill(
+                        label: "Confirmed",
+                        isActive: session.status == "confirmed",
+                        activeColor: .appAccentOrange
+                    ) {
+                        if session.status != "confirmed" { onStatusChange?("confirmed") }
+                    }
 
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundColor(.appTextTertiary)
+                    AdminRowPill(
+                        label: "Cancelled",
+                        isActive: session.status == "cancelled",
+                        activeColor: .appError
+                    ) {
+                        if session.status != "cancelled" { onStatusChange?("cancelled") }
+                    }
+
+                    Spacer()
+
+                    // Payments toggle
+                    Button {
+                        onTogglePayments?()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "creditcard.fill")
+                                .font(.system(size: 10))
+                            Text(session.paymentsOpen ? "ON" : "OFF")
+                                .font(.system(size: 10, weight: .black))
+                                .tracking(0.6)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(session.paymentsOpen ? Color.appSuccess.opacity(0.2) : Color.appSurfaceElevated)
+                        .foregroundColor(session.paymentsOpen ? .appSuccess : .appTextSecondary)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
         .padding()
         .background(Color.appSurface)
@@ -517,6 +615,27 @@ struct AdminSessionRow: View {
             RoundedRectangle(cornerRadius: AppStyle.cardCornerRadius)
                 .stroke(Color.appBorder, lineWidth: 1)
         )
+    }
+}
+
+private struct AdminRowPill: View {
+    let label: String
+    let isActive: Bool
+    let activeColor: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 10, weight: .bold))
+                .tracking(0.4)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(isActive ? activeColor.opacity(0.2) : Color.appSurfaceElevated)
+                .foregroundColor(isActive ? activeColor : .appTextSecondary)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

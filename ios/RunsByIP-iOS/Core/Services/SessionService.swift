@@ -58,12 +58,19 @@ final class SessionService: ObservableObject {
     }
 
     func cancelSession(id: String) async throws {
+        try await updateSessionStatus(id: id, status: "cancelled")
+    }
+
+    func updateSessionStatus(id: String, status: String) async throws {
         do {
             try await supabase
                 .from("sessions")
-                .update(["status": "cancelled"])
+                .update(["status": status])
                 .eq("id", value: id)
                 .execute()
+            // Refresh local data
+            try await fetchAllSessions()
+            try await fetchCurrentSession()
         } catch {
             throw AppError.networkError(error.localizedDescription)
         }
@@ -174,6 +181,16 @@ final class SessionService: ObservableObject {
                 .update(["payments_open": open])
                 .eq("id", value: sessionId)
                 .execute()
+
+            // Auto-push when payments open
+            if open {
+                await sendPush(
+                    type: "payments_open",
+                    sessionId: sessionId,
+                    title: "Spots are live!",
+                    body: "Payments just opened — first come, first served. Lock in now."
+                )
+            }
         } catch {
             throw AppError.networkError(error.localizedDescription)
         }
@@ -234,6 +251,26 @@ final class SessionService: ObservableObject {
         }
     }
 
+    // MARK: - Push Notifications
+
+    func sendPush(type: String, sessionId: String? = nil, title: String? = nil, body: String? = nil) async {
+        do {
+            var payload: [String: String] = ["type": type]
+            if let sessionId { payload["session_id"] = sessionId }
+            if let title { payload["title"] = title }
+            if let body { payload["body"] = body }
+
+            let url = URL(string: "https://ncjgkthruvapcogqaxhi.supabase.co/functions/v1/send-push")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            _ = try await URLSession.shared.data(for: request)
+        } catch {
+            // Push failures are non-critical — don't block the caller
+        }
+    }
+
     // MARK: - Create Session
 
     func createSession(date: String, time: String, location: String, maxPlayers: Int, priceCents: Int) async throws {
@@ -264,6 +301,13 @@ final class SessionService: ObservableObject {
                     status: "open"
                 ))
                 .execute()
+
+            // Auto-push notification
+            await sendPush(
+                type: "session_open",
+                title: "New run dropped!",
+                body: "\(date) at \(time) — \(location). Lock in your spot."
+            )
         } catch {
             throw AppError.networkError(error.localizedDescription)
         }
