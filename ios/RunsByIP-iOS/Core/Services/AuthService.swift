@@ -108,6 +108,36 @@ final class AuthService: ObservableObject {
         }
     }
 
+    // MARK: - Delete Account
+
+    /// Permanently deletes the current user's account and all associated data
+    /// (profile, chat messages, reactions, push tokens, avatar, chat photos).
+    /// Backed by the `delete-account` Supabase Edge Function which runs the
+    /// admin-level deletion on the server. Required by App Store Guideline 5.1.1(v).
+    func deleteAccount() async throws {
+        guard currentUser != nil else { throw AppError.unauthorized }
+
+        do {
+            // The Supabase SDK automatically attaches the active user's JWT.
+            // The edge function verifies it server-side before deleting.
+            try await supabase.functions.invoke("delete-account")
+        } catch {
+            throw AppError.networkError(error.localizedDescription)
+        }
+
+        // Server has destroyed the user; tear down the local session too so
+        // the app returns to the unauthenticated root view.
+        do {
+            try await supabase.auth.signOut()
+        } catch {
+            // Even if local sign-out fails, the account is already gone server-side.
+            // Force-clear local state so the UI doesn't get stuck.
+        }
+        currentUser = nil
+        currentProfile = nil
+        isAdmin = false
+    }
+
     // MARK: - Profile
 
     func loadProfile() async {

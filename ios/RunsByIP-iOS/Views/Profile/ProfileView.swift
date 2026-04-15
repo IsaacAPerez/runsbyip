@@ -14,6 +14,8 @@ struct ProfileView: View {
     @State private var isSaving = false
     @State private var notificationsEnabled = false
     @State private var showSignOutConfirm = false
+    @State private var showDeleteAccountConfirm = false
+    @State private var isDeletingAccount = false
     @State private var errorMessage: String?
 
     private let bioCharacterLimit = 160
@@ -88,6 +90,9 @@ struct ProfileView: View {
                             .padding(.horizontal)
 
                         signOutButton
+                            .padding(.horizontal)
+
+                        deleteAccountButton
                             .padding(.horizontal)
 
                         Text("RunsByIP v\(versionText)")
@@ -172,6 +177,18 @@ struct ProfileView: View {
                 }
             } message: {
                 Text("Are you sure you want to sign out?")
+            }
+            .confirmationDialog(
+                "Delete Account?",
+                isPresented: $showDeleteAccountConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Forever", role: .destructive) {
+                    Task { await performAccountDeletion() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently deletes your account, profile, chat messages, photos, and push notification settings. This action cannot be undone.")
             }
             .task {
                 notificationsEnabled = await notificationService.authorizationGranted()
@@ -354,6 +371,55 @@ struct ProfileView: View {
             .background(Color.appError.opacity(0.1), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+
+    private var deleteAccountButton: some View {
+        VStack(spacing: 8) {
+            Button {
+                guard !isDeletingAccount else { return }
+                errorMessage = nil
+                showDeleteAccountConfirm = true
+            } label: {
+                HStack(spacing: 10) {
+                    if isDeletingAccount {
+                        ProgressView().tint(.appError)
+                    } else {
+                        Image(systemName: "trash")
+                    }
+                    Text(isDeletingAccount ? "Deleting…" : "Delete Account")
+                        .fontWeight(.semibold)
+                }
+                .foregroundColor(.appError)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.appError.opacity(0.6), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isDeletingAccount)
+
+            Text("Permanently removes your account and all associated data.")
+                .font(.caption2)
+                .foregroundColor(.appTextSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 8)
+        }
+    }
+
+    private func performAccountDeletion() async {
+        isDeletingAccount = true
+        errorMessage = nil
+        defer { isDeletingAccount = false }
+
+        do {
+            try await authService.deleteAccount()
+            // On success, AuthService clears its session — the root view
+            // observer in AppRouter swaps the UI back to LoginView automatically.
+        } catch {
+            errorMessage = "Could not delete account: \(error.localizedDescription)"
+        }
     }
 
     private func errorBanner(_ message: String) -> some View {
