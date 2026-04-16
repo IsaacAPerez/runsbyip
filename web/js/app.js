@@ -278,7 +278,8 @@ payBtn.addEventListener('click', handlePayment);
 
 // Load the next upcoming session
 async function loadSession() {
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   // Web users see sessions tagged for everyone ('all') or the web client
   // specifically ('web'). iOS-only sessions stay invisible here.
