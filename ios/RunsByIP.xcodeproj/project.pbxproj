@@ -347,7 +347,6 @@
 				};
 			};
 			buildConfigurationList = 72C395E0234C6279E1F0F8D7 /* Build configuration list for PBXProject "RunsByIP" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -361,6 +360,7 @@
 				91C8443658174D5859C1556C /* XCRemoteSwiftPackageReference "supabase-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
+			productRefGroup = 5E0171DDCB89DD586DD5B4DE /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -451,7 +451,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.isaacperez.runsbyip;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -470,7 +470,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.isaacperez.runsbyip;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};

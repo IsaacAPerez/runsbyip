@@ -63,10 +63,13 @@ targets:
         NSCameraUsageDescription: "Used for profile photo"
         NSPhotoLibraryUsageDescription: "Used for profile photo"
         UIUserInterfaceStyle: Dark
+        ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: RunsByIP-iOS/RunsByIP.entitlements
       properties:
         aps-environment: development
+        com.apple.developer.applesignin:
+          - Default
         com.apple.developer.associated-domains:
           - applinks:runsbyip.com
         com.apple.developer.in-app-payments:
