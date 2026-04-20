@@ -37,4 +37,5 @@ jobs:
         env:
           LANG: en_US.UTF-8
           LC_ALL: en_US.UTF-8
+          BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
         run: fastlane beta
