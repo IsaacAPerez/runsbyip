@@ -40,6 +40,7 @@
 		97939F9A151BAD6FC721922C /* NavigationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 570BF1DA145943B9D2B53AA7 /* NavigationCoordinator.swift */; };
 		9A50CEBC4D85494C871BE468 /* SessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC20AC94D20854C0B1609FF /* SessionService.swift */; };
 		A741B5E8E852306D9E6A3BBE /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4EF9200262867E62FD9389F /* AvatarView.swift */; };
+		A9AFE656422F7E0C7D90830D /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D11581A4829F366CD4FC78DA /* SplashView.swift */; };
 		B279C307C71F168248FDE012 /* PaymentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3125BABB939048E525C4B23 /* PaymentService.swift */; };
 		B5ED8AEB603EE98DC17B4C25 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F723FD1ED7860429B8A3408 /* AppDelegate.swift */; };
 		BF055950D043BA72D446E180 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DC9DC78F3FBDC625E4F831E2 /* Supabase */; };
@@ -98,6 +99,7 @@
 		B8E942A3F945820D0DEF635A /* AdminRSVPView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminRSVPView.swift; sourceTree = "<group>"; };
 		BAA5323E06E0DA926C6D6FEC /* SessionCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCardView.swift; sourceTree = "<group>"; };
 		C8A20938BEAD722F6C847CBC /* RunsByIP.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RunsByIP.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D11581A4829F366CD4FC78DA /* SplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashView.swift; sourceTree = "<group>"; };
 		DB4012AF6FA68FCC46D244FD /* RSVPView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RSVPView.swift; sourceTree = "<group>"; };
 		E2D17CD550A7C7D9AEA96B7A /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		E4EF9200262867E62FD9389F /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
@@ -161,6 +163,7 @@
 				673C3C19F5026DCFBED6EC53 /* HeroGalleryView.swift */,
 				115356677835FDBFB28A9EFC /* LoadingView.swift */,
 				2760C0801B49CA903B4BE693 /* PlayerRowView.swift */,
+				D11581A4829F366CD4FC78DA /* SplashView.swift */,
 				45E7AE55CEFCC4CA740124D5 /* ToastView.swift */,
 			);
 			path = Components;
@@ -425,6 +428,7 @@
 				12EDF86DD545DB94805533A3 /* SessionDetailView.swift in Sources */,
 				9A50CEBC4D85494C871BE468 /* SessionService.swift in Sources */,
 				34CAB8ACF82E53CE8EA66F21 /* SessionsListView.swift in Sources */,
+				A9AFE656422F7E0C7D90830D /* SplashView.swift in Sources */,
 				4A027480F40C2F3825519144 /* String+Validation.swift in Sources */,
 				E1EB7A96F0E82EF71E10B8C9 /* SupabaseService.swift in Sources */,
 				C2268B8D0F70C1AD4CFC6DF1 /* ToastView.swift in Sources */,

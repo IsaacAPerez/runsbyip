@@ -106,7 +106,7 @@ struct RootView: View {
         Group {
             switch appRouter.authState {
             case .loading:
-                LoadingView()
+                SplashView()
             case .unauthenticated:
                 LoginView()
             case .authenticated:
