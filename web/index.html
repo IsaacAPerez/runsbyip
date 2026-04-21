@@ -212,11 +212,11 @@
               return;
             }
             var s=sessions[0];
-            return fetch(SUPA_URL+'/rest/v1/rsvps?select=id&session_id=eq.'+s.id,{
-              headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'count=exact'}
-            }).then(function(r){
-              var range=r.headers.get('content-range');
-              var count=range?parseInt(range.split('/')[1])||0:0;
+            return fetch(SUPA_URL+'/rest/v1/rpc/session_rsvp_count',{
+              method:'POST',
+              headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+              body:JSON.stringify({p_session_id:s.id})
+            }).then(function(r){return r.json();}).then(function(count){
               showFallback(
                 '<div style="text-align:left;background:#1A1A1E;border:1px solid #2C2C2E;border-left:4px solid #FF8C42;border-radius:16px;padding:20px;">'
                 +'<h3 style="font-size:18px;font-weight:700;color:#fff;margin:0 0 4px;">'+fmtDate(s.date)+'</h3>'
