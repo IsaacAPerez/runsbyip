@@ -166,10 +166,14 @@ final class ChatService: ObservableObject {
         return reaction.userIds.contains(currentUserId)
     }
 
-    func subscribeToMessages() {
-        subscribeToMessageInserts()
-        subscribeToReactionChanges()
-        subscribeToTypingPresence()
+    /// Sets up all three realtime channels and awaits each channel's initial
+    /// subscription. Broadcasting (used for the typing indicator) only works
+    /// once the channel is subscribed — firing-and-forgetting the subscribe
+    /// lost early keystrokes.
+    func subscribeToMessages() async {
+        await subscribeToMessageInserts()
+        await subscribeToReactionChanges()
+        await subscribeToTypingPresence()
     }
 
     func setTyping(isTyping: Bool) {
@@ -314,33 +318,70 @@ final class ChatService: ObservableObject {
         }
     }
 
-    private func subscribeToMessageInserts() {
-        messageChannel = supabase.realtimeV2.channel("messages-room")
-        guard let messageChannel else { return }
+    private func subscribeToMessageInserts() async {
+        let channel = supabase.realtimeV2.channel("messages-room")
+        messageChannel = channel
 
-        let insertions = messageChannel.postgresChange(InsertAction.self, table: "messages")
+        let insertions = channel.postgresChange(InsertAction.self, table: "messages")
 
         Task { [weak self] in
             for await insert in insertions {
                 guard let self else { return }
-                if let message = try? insert.decodeRecord(as: ChatMessage.self, decoder: jsonDecoder),
-                   !self.messages.contains(where: { $0.id == message.id }) {
-                    self.messages.append(message)
+                guard let raw = try? insert.decodeRecord(as: ChatMessage.self, decoder: jsonDecoder),
+                      !self.messages.contains(where: { $0.id == raw.id }) else { continue }
+
+                // Append the raw row immediately so the bubble appears without delay.
+                self.messages.append(raw)
+
+                // Then re-fetch through `messages_with_profiles` to pick up
+                // the sender's current avatar_url + display_name — realtime
+                // only ships `messages` columns, and avatar_url lives on the
+                // profiles table.
+                Task { [weak self] in
+                    await self?.hydrateMessageFromView(id: raw.id)
                 }
             }
         }
 
-        Task {
-            try? await messageChannel.subscribeWithError()
+        do {
+            try await channel.subscribeWithError()
+        } catch {
+            print("[ChatService] messages channel subscribe failed: \(error)")
         }
     }
 
-    private func subscribeToReactionChanges() {
-        reactionChannel = supabase.realtimeV2.channel("message-reactions-room")
-        guard let reactionChannel else { return }
+    /// Realtime INSERT events on `messages` don't carry avatar_url (it was
+    /// moved to the profiles table in migration 003). Re-query the single
+    /// row through `messages_with_profiles` to get the joined profile data,
+    /// then swap the enriched version into the messages array.
+    private func hydrateMessageFromView(id: String) async {
+        do {
+            let enriched: ChatMessage = try await supabase
+                .from("messages_with_profiles")
+                .select()
+                .eq("id", value: id)
+                .single()
+                .execute()
+                .value
 
-        let insertions = reactionChannel.postgresChange(InsertAction.self, table: "message_reactions")
-        let deletions = reactionChannel.postgresChange(DeleteAction.self, table: "message_reactions")
+            if let idx = messages.firstIndex(where: { $0.id == id }) {
+                messages[idx] = enriched
+            }
+            if let url = enriched.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !url.isEmpty {
+                avatarURLByUserId[enriched.userId.lowercased()] = url
+            }
+        } catch {
+            // Keep the raw row — AvatarView falls back to initials.
+        }
+    }
+
+    private func subscribeToReactionChanges() async {
+        let channel = supabase.realtimeV2.channel("message-reactions-room")
+        reactionChannel = channel
+
+        let insertions = channel.postgresChange(InsertAction.self, table: "message_reactions")
+        let deletions = channel.postgresChange(DeleteAction.self, table: "message_reactions")
 
         Task { [weak self] in
             for await insert in insertions {
@@ -362,16 +403,18 @@ final class ChatService: ObservableObject {
             }
         }
 
-        Task {
-            try? await reactionChannel.subscribeWithError()
+        do {
+            try await channel.subscribeWithError()
+        } catch {
+            print("[ChatService] reactions channel subscribe failed: \(error)")
         }
     }
 
-    private func subscribeToTypingPresence() {
-        typingChannel = supabase.realtimeV2.channel("chat-typing-room")
-        guard let typingChannel else { return }
+    private func subscribeToTypingPresence() async {
+        let channel = supabase.realtimeV2.channel("chat-typing-room")
+        typingChannel = channel
 
-        let typingEvents = typingChannel.broadcastStream(event: "typing")
+        let typingEvents = channel.broadcastStream(event: "typing")
 
         Task { [weak self] in
             for await payload in typingEvents {
@@ -385,8 +428,10 @@ final class ChatService: ObservableObject {
             }
         }
 
-        Task {
-            try? await typingChannel.subscribeWithError()
+        do {
+            try await channel.subscribeWithError()
+        } catch {
+            print("[ChatService] typing channel subscribe failed: \(error)")
         }
 
         typingExpiryTask?.cancel()

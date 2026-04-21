@@ -238,8 +238,11 @@ struct ChatView: View {
         currentUserId = await chatService.currentUserId
         isMuted = await chatService.checkMuteStatus()
         do {
+            // Subscribe first so we don't miss any messages arriving between
+            // the fetch and when the channel connects. The insert handler
+            // dedupes by id against the fetched array.
+            await chatService.subscribeToMessages()
             try await chatService.fetchMessages()
-            chatService.subscribeToMessages()
         } catch {
             errorMessage = error.localizedDescription
         }
