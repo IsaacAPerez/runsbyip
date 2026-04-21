@@ -367,11 +367,12 @@ function subscribeToSession() {
 async function loadRSVPs() {
   if (!currentSession) return;
 
+  // Every row in rsvps is a confirmed (paid) attendee — the stripe-webhook
+  // is the only thing that inserts rows, and only on payment_intent.succeeded.
   const { data: rsvps, error } = await db
-    .from('public_rsvps')
+    .from('rsvps')
     .select('*')
-    .eq('session_id', currentSession.id)
-    .in('payment_status', ['paid', 'cash']);
+    .eq('session_id', currentSession.id);
 
   if (error) {
     console.error('Error loading RSVPs:', error);

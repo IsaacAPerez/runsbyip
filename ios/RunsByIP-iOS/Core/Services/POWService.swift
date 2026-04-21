@@ -59,7 +59,6 @@ final class POWService: ObservableObject {
                 .from("rsvps")
                 .select()
                 .eq("session_id", value: sessionId)
-                .in("payment_status", values: ["paid", "cash"])
                 .order("player_name", ascending: true)
                 .execute()
                 .value

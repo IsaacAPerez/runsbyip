@@ -31,8 +31,6 @@ struct RSVP: Codable, Identifiable {
     let sessionId: String
     let playerName: String
     let playerEmail: String
-    let paymentStatus: String // "pending", "paid", or "cash"
-    let stripeSessionId: String?
     let createdAt: String
 
     enum CodingKeys: String, CodingKey {
@@ -40,8 +38,6 @@ struct RSVP: Codable, Identifiable {
         case sessionId = "session_id"
         case playerName = "player_name"
         case playerEmail = "player_email"
-        case paymentStatus = "payment_status"
-        case stripeSessionId = "stripe_session_id"
         case createdAt = "created_at"
     }
 }
@@ -270,17 +266,6 @@ extension GameSession {
 
     var priceDisplay: String {
         "$\(priceCents / 100)"
-    }
-}
-
-// MARK: - RSVP Helpers
-
-extension RSVP {
-    var isPaid: Bool { paymentStatus == "paid" || paymentStatus == "cash" }
-    var isPending: Bool { paymentStatus == "pending" }
-
-    static func confirmed(from rsvps: [RSVP]) -> [RSVP] {
-        rsvps.filter { $0.isPaid }
     }
 }
 

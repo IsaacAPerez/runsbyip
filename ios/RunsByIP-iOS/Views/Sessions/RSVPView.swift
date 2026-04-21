@@ -514,7 +514,7 @@ struct RSVPView: View {
 
     private func refreshCapacity() async {
         do {
-            confirmedCount = try await sessionService.fetchPaidRSVPCount(for: session.id)
+            confirmedCount = try await sessionService.fetchRSVPCount(for: session.id)
             if isSessionFull {
                 errorMessage = "This run is full. Checkout is no longer available."
             }

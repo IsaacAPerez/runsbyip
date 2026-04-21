@@ -14,7 +14,9 @@ struct AdminRSVPView: View {
 
     @Environment(\.dismiss) var dismiss
 
-    private var confirmed: [RSVP] { RSVP.confirmed(from: rsvps) }
+    // Every row in `rsvps` is a confirmed (paid) attendee — `rsvps` is the
+    // canonical list.
+    private var confirmed: [RSVP] { rsvps }
 
     var body: some View {
         ZStack {
@@ -205,7 +207,7 @@ struct AdminPlayerRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            PlayerRowView(name: rsvp.playerName, status: rsvp.paymentStatus)
+            PlayerRowView(name: rsvp.playerName)
 
             Toggle("", isOn: Binding(
                 get: { isCheckedIn },

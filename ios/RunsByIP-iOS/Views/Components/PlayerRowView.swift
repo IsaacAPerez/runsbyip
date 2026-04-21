@@ -2,7 +2,6 @@ import SwiftUI
 
 struct PlayerRowView: View {
     let name: String
-    let status: String
 
     private var initials: String {
         let parts = name.split(separator: " ")
@@ -29,8 +28,6 @@ struct PlayerRowView: View {
                 .foregroundColor(.white)
 
             Spacer()
-
-            BadgeView.forStatus(status)
         }
         .padding(.vertical, 4)
     }
@@ -38,8 +35,8 @@ struct PlayerRowView: View {
 
 #Preview {
     VStack {
-        PlayerRowView(name: "Isaac Perez", status: "paid")
-        PlayerRowView(name: "John Doe", status: "pending")
+        PlayerRowView(name: "Isaac Perez")
+        PlayerRowView(name: "John Doe")
     }
     .padding()
     .background(Color.appBackground)

@@ -309,7 +309,7 @@ struct AdminDashboardView: View {
             try await sessionService.fetchAllSessions(forAdmin: true)
             try await sessionService.fetchCurrentSession()
             for session in sessionService.sessions {
-                rsvpCounts[session.id] = try await sessionService.fetchPaidRSVPCount(for: session.id)
+                rsvpCounts[session.id] = try await sessionService.fetchRSVPCount(for: session.id)
             }
         } catch {
             // Dashboard degrades gracefully

@@ -41,7 +41,7 @@ final class SessionService: ObservableObject {
             currentSession = results.first
 
             if let sessionId = results.first?.id {
-                currentSessionRSVPCount = try await fetchPaidRSVPCount(for: sessionId)
+                currentSessionRSVPCount = try await fetchRSVPCount(for: sessionId)
             } else {
                 currentSessionRSVPCount = 0
             }
@@ -109,13 +109,15 @@ final class SessionService: ObservableObject {
         }
     }
 
-    func fetchPaidRSVPCount(for sessionId: String) async throws -> Int {
+    /// Every row in `rsvps` represents a completed Stripe payment, so the count
+    /// of rows IS the confirmed attendee count. Kept as a separate helper so
+    /// callers don't need to know the schema invariant.
+    func fetchRSVPCount(for sessionId: String) async throws -> Int {
         do {
             let rsvps: [RSVP] = try await supabase
                 .from("rsvps")
                 .select()
                 .eq("session_id", value: sessionId)
-                .in("payment_status", values: ["paid", "cash"])
                 .execute()
                 .value
             return rsvps.count
@@ -171,7 +173,6 @@ final class SessionService: ObservableObject {
             let rsvps: [RSVP] = try await supabase
                 .from("rsvps")
                 .select()
-                .in("payment_status", values: ["paid", "cash"])
                 .execute()
                 .value
 
@@ -239,20 +240,22 @@ final class SessionService: ObservableObject {
         rsvpChannel = supabase.realtimeV2.channel("rsvps-changes")
         guard let rsvpChannel else { return }
 
+        // RSVPs are insert-only (created by the stripe-webhook on payment
+        // success) and delete-capable (admin removal). No UPDATEs happen.
         let rsvpInserts = rsvpChannel.postgresChange(InsertAction.self, table: "rsvps")
-        let rsvpUpdates = rsvpChannel.postgresChange(UpdateAction.self, table: "rsvps")
+        let rsvpDeletes = rsvpChannel.postgresChange(DeleteAction.self, table: "rsvps")
 
         Task { [weak self] in
             for await _ in rsvpInserts {
                 guard let self, let id = self.currentSession?.id else { continue }
-                self.currentSessionRSVPCount = (try? await self.fetchPaidRSVPCount(for: id)) ?? self.currentSessionRSVPCount
+                self.currentSessionRSVPCount = (try? await self.fetchRSVPCount(for: id)) ?? self.currentSessionRSVPCount
             }
         }
 
         Task { [weak self] in
-            for await _ in rsvpUpdates {
+            for await _ in rsvpDeletes {
                 guard let self, let id = self.currentSession?.id else { continue }
-                self.currentSessionRSVPCount = (try? await self.fetchPaidRSVPCount(for: id)) ?? self.currentSessionRSVPCount
+                self.currentSessionRSVPCount = (try? await self.fetchRSVPCount(for: id)) ?? self.currentSessionRSVPCount
             }
         }
 

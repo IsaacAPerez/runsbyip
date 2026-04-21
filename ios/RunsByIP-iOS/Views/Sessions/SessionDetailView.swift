@@ -10,7 +10,8 @@ struct SessionDetailView: View {
     @State private var errorMessage: String?
     @State private var showRSVP = false
 
-    private var confirmed: [RSVP] { RSVP.confirmed(from: rsvps) }
+    // Every row in `rsvps` is a confirmed (paid) attendee.
+    private var confirmed: [RSVP] { rsvps }
     private var isFull: Bool { confirmed.count >= session.maxPlayers }
 
     var body: some View {
@@ -64,7 +65,7 @@ struct SessionDetailView: View {
                                     .padding(.vertical, 8)
                             } else {
                                 ForEach(confirmed) { rsvp in
-                                    PlayerRowView(name: rsvp.playerName, status: rsvp.paymentStatus)
+                                    PlayerRowView(name: rsvp.playerName)
                                 }
                             }
                         }

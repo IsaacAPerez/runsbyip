@@ -8,6 +8,10 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+// Creates a Stripe PaymentIntent for an RSVP.
+// We do NOT insert into the rsvps table here — the stripe-webhook function
+// is the sole creator of RSVP rows, triggered by payment_intent.succeeded.
+// All the data the webhook needs is carried in PaymentIntent.metadata.
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -26,59 +30,36 @@ Deno.serve(async (req: Request) => {
     const { session_id, player_name, player_email } = await req.json();
 
     if (!session_id || !player_name || !player_email) {
-      return new Response(
-        JSON.stringify({ error: "Missing required fields" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return json({ error: "Missing required fields" }, 400);
     }
 
     const { data: session, error: sessionError } = await supabase
       .from("sessions")
-      .select("*")
+      .select("id, status, payments_open, price_cents, max_players, date")
       .eq("id", session_id)
       .single();
 
     if (sessionError || !session) {
-      return new Response(JSON.stringify({ error: "Session not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Session not found" }, 404);
     }
 
     if (session.status === "cancelled") {
-      return new Response(JSON.stringify({ error: "Session is cancelled" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Session is cancelled" }, 400);
     }
 
     if (!session.payments_open) {
-      return new Response(
-        JSON.stringify({ error: "Payments are not open yet" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return json({ error: "Payments are not open yet" }, 400);
     }
 
     const { count } = await supabase
       .from("rsvps")
       .select("*", { count: "exact", head: true })
-      .eq("session_id", session_id)
-      .in("payment_status", ["paid", "cash"]);
+      .eq("session_id", session_id);
 
     if (count !== null && count >= session.max_players) {
-      return new Response(JSON.stringify({ error: "Session is full" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Session is full" }, 400);
     }
 
-    // Create PaymentIntent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: session.price_cents,
       currency: "usd",
@@ -92,37 +73,16 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    // Create RSVP record
-    const { error: rsvpError } = await supabase.from("rsvps").insert({
-      session_id,
-      player_name,
-      player_email,
-      payment_status: "pending",
-      stripe_session_id: paymentIntent.id,
-    });
-
-    if (rsvpError) {
-      console.error("RSVP insert error:", rsvpError);
-      return new Response(
-        JSON.stringify({ error: "Failed to create RSVP" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    return new Response(
-      JSON.stringify({ client_secret: paymentIntent.client_secret }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
-    );
+    return json({ client_secret: paymentIntent.client_secret });
   } catch (err) {
-    console.error("Error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("create-checkout error:", err);
+    return json({ error: err instanceof Error ? err.message : "unknown" }, 500);
   }
 });
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
