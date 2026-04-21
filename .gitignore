@@ -23,3 +23,6 @@ web/.parcel-cache/
 .env.*
 !.env.example
 .vercel
+
+# Claude Code — project-local notes, not shared
+CLAUDE.md
