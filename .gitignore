@@ -5,6 +5,7 @@
 # iOS / Xcode
 ios/build/
 ios/DerivedData/
+ios/DerivedDataCLI/
 ios/**/xcuserdata/
 ios/**/*.xcuserstate
 ios/**/.swiftpm/

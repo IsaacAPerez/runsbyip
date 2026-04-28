@@ -1,0 +1,11 @@
+---
+description: Default iOS simulator for RunsByIP builds and runs
+globs: ios/**/*
+alwaysApply: false
+---
+
+When building or running the **RunsByIP** iOS app from the CLI (`xcodebuild`, `simctl`), use **iPhone 17 Pro Max** on **iOS 26.0** (`SimRuntime.iOS-26-0`)—not iPhone 16, not iOS 26.1/26.2 unless the user explicitly overrides.
+
+- Prefer the repo script: `ios/run-ios.sh` (pins device + **iOS 26.0** runtime; waits for boot before install).
+- Overrides: `IOS_SIMULATOR_DEVICE_NAME` for a different device; `IOS_SIMULATOR_RUNTIME` for a different runtime suffix (e.g. `iOS-26-1`) only when asked.
+- If invoking `xcodebuild` directly, use `-destination 'platform=iOS Simulator,name=iPhone 17 Pro Max,OS=26.0'` or `-destination "id=<UDID>"` where the UDID is the **iOS 26.0** listing from `xcrun simctl list devices available`.
