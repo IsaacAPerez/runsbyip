@@ -474,45 +474,343 @@ private struct MostConsistentCard: View {
     }
 }
 
-// MARK: - NBA Scores Card
+// MARK: - NBA Scores Card (live ESPN data)
+
+private struct NBAScoreboardEvent: Identifiable, Equatable {
+    let id: String
+    let away: Side
+    let home: Side
+    let state: GameState
+    /// Tipoff in user's local timezone for `pre` games.
+    let startDate: Date?
+    /// ESPN-formatted live string (e.g. "Q3 4:21") for `in` games.
+    let liveDetail: String?
+
+    struct Side: Equatable {
+        let abbreviation: String
+        let score: Int
+        let logoURL: URL?
+    }
+
+    enum GameState: Equatable {
+        case scheduled
+        case live
+        case final
+    }
+}
+
+@MainActor
+private final class NBAScoreboardViewModel: ObservableObject {
+    @Published var events: [NBAScoreboardEvent] = []
+    @Published var isLoading: Bool = false
+    @Published var didLoad: Bool = false
+
+    private let endpoint = URL(string: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard")!
+
+    func loadIfNeeded() async {
+        guard !didLoad, !isLoading else { return }
+        await load()
+    }
+
+    func load() async {
+        isLoading = true
+        defer {
+            isLoading = false
+            didLoad = true
+        }
+        do {
+            var request = URLRequest(url: endpoint, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 8)
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            let (data, _) = try await URLSession.shared.data(for: request)
+            let decoded = try JSONDecoder().decode(ESPNScoreboardResponse.self, from: data)
+            events = decoded.events.compactMap(Self.map(event:))
+        } catch {
+            // Soft-fail: leave events empty so the card can show a friendly fallback.
+            events = []
+        }
+    }
+
+    private static func map(event: ESPNScoreboardResponse.Event) -> NBAScoreboardEvent? {
+        guard let comp = event.competitions.first,
+              comp.competitors.count == 2,
+              let awayRaw = comp.competitors.first(where: { $0.homeAway == "away" }),
+              let homeRaw = comp.competitors.first(where: { $0.homeAway == "home" })
+        else { return nil }
+
+        let stateString = event.status.type.state
+        let state: NBAScoreboardEvent.GameState = {
+            switch stateString {
+            case "in": return .live
+            case "post": return .final
+            default: return .scheduled
+            }
+        }()
+
+        let liveDetail: String? = {
+            guard state == .live else { return nil }
+            let clock = event.status.displayClock?.trimmingCharacters(in: .whitespaces) ?? ""
+            let q = event.status.period.map { "Q\($0)" }
+            return [q, clock.isEmpty ? nil : clock].compactMap { $0 }.joined(separator: " ")
+        }()
+
+        let startDate: Date? = state == .scheduled ? parseESPNDate(event.date) : nil
+
+        return NBAScoreboardEvent(
+            id: event.id,
+            away: side(from: awayRaw),
+            home: side(from: homeRaw),
+            state: state,
+            startDate: startDate,
+            liveDetail: liveDetail
+        )
+    }
+
+    private static func side(from competitor: ESPNScoreboardResponse.Event.Competition.Competitor) -> NBAScoreboardEvent.Side {
+        let score = Int(competitor.score ?? "0") ?? 0
+        let abbrev = competitor.team.abbreviation ?? "—"
+        let logo = competitor.team.logo.flatMap(URL.init(string:))
+        return .init(abbreviation: abbrev, score: score, logoURL: logo)
+    }
+}
+
+/// ESPN's scoreboard endpoint sends timestamps like `2026-04-28T23:00Z` (no seconds),
+/// which `ISO8601DateFormatter` won't accept. Try a few common shapes.
+private func parseESPNDate(_ raw: String) -> Date? {
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime]
+    if let d = iso.date(from: raw) { return d }
+    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let d = iso.date(from: raw) { return d }
+
+    let df = DateFormatter()
+    df.locale = Locale(identifier: "en_US_POSIX")
+    df.timeZone = TimeZone(secondsFromGMT: 0)
+    for format in [
+        "yyyy-MM-dd'T'HH:mm'Z'",
+        "yyyy-MM-dd'T'HH:mmZZZZZ",
+        "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
+    ] {
+        df.dateFormat = format
+        if let d = df.date(from: raw) { return d }
+    }
+    return nil
+}
+
+private struct ESPNScoreboardResponse: Decodable {
+    let events: [Event]
+
+    struct Event: Decodable {
+        let id: String
+        let date: String
+        let competitions: [Competition]
+        let status: Status
+
+        struct Status: Decodable {
+            let displayClock: String?
+            let period: Int?
+            let type: TypeInfo
+
+            struct TypeInfo: Decodable {
+                let state: String
+            }
+        }
+
+        struct Competition: Decodable {
+            let competitors: [Competitor]
+
+            struct Competitor: Decodable {
+                let homeAway: String
+                let score: String?
+                let team: Team
+
+                struct Team: Decodable {
+                    let abbreviation: String?
+                    let logo: String?
+                }
+            }
+        }
+    }
+}
 
 private struct NBAScoresCard: View {
+    @StateObject private var viewModel = NBAScoreboardViewModel()
+
+    private var headerSubtitle: String {
+        if viewModel.isLoading && viewModel.events.isEmpty { return "Loading scores…" }
+        if viewModel.events.isEmpty { return "No games scheduled today" }
+        let liveCount = viewModel.events.filter { $0.state == .live }.count
+        if liveCount > 0 { return "\(liveCount) live · \(viewModel.events.count) total" }
+        return "\(viewModel.events.count) game\(viewModel.events.count == 1 ? "" : "s") today"
+    }
+
     var body: some View {
-        Button {
-            if let url = URL(string: "https://www.espn.com/nba/scoreboard") {
-                UIApplication.shared.open(url)
-            }
-        } label: {
-            HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 10) {
                 Image(systemName: "basketball.fill")
-                    .font(.system(size: 24))
+                    .font(.system(size: 18))
                     .foregroundColor(.appAccentOrange)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("NBA TODAY")
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
                         .tracking(1.4)
                         .foregroundColor(.appTextSecondary)
-
-                    Text("Check today's scores & highlights")
-                        .font(.system(size: 15, weight: .semibold))
+                    Text(headerSubtitle)
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
                 }
 
                 Spacer()
 
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.appTextTertiary)
+                Button {
+                    if let url = URL(string: "https://www.espn.com/nba/scoreboard") {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("ESPN")
+                            .font(.system(size: 11, weight: .bold))
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundColor(.appTextSecondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.appSurfaceElevated, in: Capsule())
+                }
+                .buttonStyle(.plain)
             }
-            .padding(18)
-            .background(Color.appSurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color.appBorder, lineWidth: 1)
-            )
+
+            if viewModel.events.isEmpty {
+                EmptyNBAScoresRow(isLoading: viewModel.isLoading)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(viewModel.events) { event in
+                            NBAGameTile(event: event)
+                        }
+                    }
+                }
+                // Negative side padding lets tiles bleed slightly past card edge.
+                .padding(.horizontal, -2)
+            }
         }
-        .buttonStyle(.plain)
+        .padding(18)
+        .background(Color.appSurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.appBorder, lineWidth: 1)
+        )
+        .task { await viewModel.loadIfNeeded() }
+        .refreshable { await viewModel.load() }
+    }
+}
+
+private struct EmptyNBAScoresRow: View {
+    let isLoading: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: isLoading ? "clock" : "basketball")
+                .font(.system(size: 18))
+                .foregroundColor(.appTextTertiary)
+
+            Text(isLoading ? "Loading today's NBA scoreboard…" : "No NBA games today. Check ESPN for the schedule.")
+                .font(.system(size: 13))
+                .foregroundColor(.appTextSecondary)
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct NBAGameTile: View {
+    let event: NBAScoreboardEvent
+
+    private static func formatStartTime(_ date: Date) -> String {
+        let cal = Calendar.current
+        let comps = cal.dateComponents([.minute], from: date)
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = (comps.minute == 0) ? "ha" : "h:mma"
+        f.amSymbol = "AM"
+        f.pmSymbol = "PM"
+        return f.string(from: date)
+    }
+
+    private var statusBadge: some View {
+        let (text, color): (String, Color) = {
+            switch event.state {
+            case .scheduled:
+                if let date = event.startDate {
+                    return (NBAGameTile.formatStartTime(date), .appTextSecondary)
+                }
+                return ("SCHED", .appTextSecondary)
+            case .live:
+                return (event.liveDetail ?? "LIVE", .appAccentOrange)
+            case .final:
+                return ("FINAL", .appTextSecondary)
+            }
+        }()
+
+        return Text(text.uppercased())
+            .font(.system(size: 9, weight: .heavy, design: .monospaced))
+            .tracking(0.8)
+            .foregroundColor(color)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.15), in: Capsule())
+    }
+
+    private func teamRow(_ side: NBAScoreboardEvent.Side, isWinner: Bool) -> some View {
+        HStack(spacing: 8) {
+            AsyncImage(url: side.logoURL) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFit()
+                default:
+                    Circle().fill(Color.appSurfaceElevated)
+                }
+            }
+            .frame(width: 22, height: 22)
+
+            Text(side.abbreviation)
+                .font(.system(size: 13, weight: isWinner ? .heavy : .semibold))
+                .foregroundColor(.white)
+
+            Spacer(minLength: 6)
+
+            if event.state != .scheduled {
+                Text("\(side.score)")
+                    .font(.system(size: 15, weight: isWinner ? .heavy : .semibold, design: .rounded))
+                    .foregroundColor(isWinner ? .white : .appTextSecondary)
+                    .monospacedDigit()
+            }
+        }
+    }
+
+    private var awayWins: Bool {
+        event.state == .final && event.away.score > event.home.score
+    }
+
+    private var homeWins: Bool {
+        event.state == .final && event.home.score > event.away.score
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            statusBadge
+            teamRow(event.away, isWinner: awayWins)
+            teamRow(event.home, isWinner: homeWins)
+        }
+        .padding(12)
+        .frame(width: 168, alignment: .leading)
+        .background(Color.appSurfaceElevated, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.appBorder, lineWidth: 0.5)
+        )
     }
 }
 
