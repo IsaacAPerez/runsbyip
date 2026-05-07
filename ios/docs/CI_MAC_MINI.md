@@ -51,7 +51,7 @@ Apply this rule to anything you do in this repo, not just signing:
   signing repo. Read with: `op read "op://Personal/Fastlane Match - ios-certificates/password"`
 - **`App Store Connect API Key - RRYR26DJLS`** — document, contains the
   `.p8` private key plus Key ID + Issuer ID metadata.
-- **`GitHub PAT — ios-certificates read`** — fine-grained PAT used by the
+- **`GitHub PAT - ios-certificates read`** — fine-grained PAT used by the
   runner to clone the signing repo.
 
 When you add new ones, append them to this list in the same commit so the
