@@ -25,5 +25,8 @@ web/.parcel-cache/
 !.env.example
 .vercel
 
+# Supabase CLI cache
+**/supabase/.temp/
+
 # Claude Code — project-local notes, not shared
 CLAUDE.md
