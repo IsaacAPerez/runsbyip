@@ -67,64 +67,91 @@ inventory stays current.
   live. Bump `ios/project.yml` (not just `pbxproj`) when you raise it
   again — `xcodegen generate` rewrites `pbxproj` in CI.
 
-## ASC API key is shared across all 4 iOS apps
+## All 4 iOS apps use the same Match repo + ASC API key
 
-The same `.p8` (`AuthKey_RRYR26DJLS.p8`, key id `RRYR26DJLS`, issuer
-`d0ded18b-a760-49f9-82b3-135bb3b65703`) signs every iOS app on this team:
+The same `.p8` (key id `RRYR26DJLS`, issuer `d0ded18b-a760-49f9-82b3-135bb3b65703`)
+and the same `IsaacAPerez/ios-certificates` Match repo serve every iOS app on
+this team. Each app's Fastfile pulls cert + profile readonly via
+`fastlane match`; the .p8 is materialized fresh per-build from 1P via the
+"Materialize ASC API key" workflow step.
 
-| App | Fastfile | API_KEY_PATH |
-|---|---|---|
-| RunsByIP | [ios/fastlane/Fastfile](../fastlane/Fastfile) | `~/.appstoreconnect/private_keys/AuthKey_RRYR26DJLS.p8` |
-| CurbSide | `ios/fastlane/Fastfile` (in `IsaacAPerez/CurbSide`) | same |
-| LukaDashboard | `App/fastlane/Fastfile` (in `IsaacAPerez/LukaDashboard`) | same |
-| RoommateApp | `fastlane/Fastfile` (in `IsaacAPerez/RoommateApp`) | same |
+| App | Fastfile | Bundle ID | Match profile |
+|---|---|---|---|
+| RunsByIP | [ios/fastlane/Fastfile](../fastlane/Fastfile) | `com.isaacperez.runsbyip` | `match AppStore com.isaacperez.runsbyip` |
+| CurbSide | `ios/fastlane/Fastfile` (in `IsaacAPerez/CurbSide`) | `com.curbside.app` | `match AppStore com.curbside.app` |
+| LukaDashboard | `App/fastlane/Fastfile` (in `IsaacAPerez/LukaDashboard`) | `com.isaacaperez.LukaDashboard` | `match AppStore com.isaacaperez.LukaDashboard` |
+| RoommateApp | `fastlane/Fastfile` (in `IsaacAPerez/RoommateApp`) | `co.isaacperez.RoommateApp` | `match AppStore co.isaacperez.RoommateApp` |
 
-All four read from `~/.appstoreconnect/private_keys/`, the canonical location
-Apple's tools use. To rotate the key: regenerate in App Store Connect, update
-the 1Password item, then re-run the bootstrap one-liner under "One-time mini
-setup" on each runner host. The legacy `~/CurbSide-CI-Files/AuthKey_*.p8`
-copy is no longer referenced by any Fastfile and can be removed once you've
-verified all 4 CIs are green.
+To rotate the ASC `.p8`: regenerate in App Store Connect, attach the new file
+to the 1Password item. CI picks it up automatically on next run (no host
+bootstrap needed — every build does `op document get` to `$RUNNER_TEMP`).
+
+The legacy `~/CurbSide-CI-Files/` directory was the pre-Match holding area
+for CurbSide's per-app cert/profile and is no longer referenced anywhere.
 
 ## How signing works
 
 - Distribution cert + provisioning profile live encrypted in
-  `git@github.com:IsaacAPerez/ios-certificates`.
-- `fastlane match(readonly: true)` clones that repo and installs both
-  into the mini's `login.keychain`.
-- The mini never logs into Apple Developer or runs 2FA. It only needs the
-  Match passphrase, the ASC API key, and git read-access to
-  `ios-certificates`.
+  `git@github.com:IsaacAPerez/ios-certificates`. One cert per team, one
+  provisioning profile per bundle ID.
+- Each app's `lane :beta` calls `match(type: "appstore", readonly: true,
+  api_key: api_key)`. Match clones the repo and installs cert + profile into
+  the runner's login keychain.
+- ASC API key authentication (the `.p8`) is sufficient — no Apple ID,
+  no 2FA. The mini can both read (CI builds) and write (regenerating
+  profiles via `lane :rotate_signing`) against `ios-certificates`.
 
-If profiles ever drift (e.g. you add a capability to the App ID), regenerate
-**from the laptop**, not the mini:
+If profiles ever drift (capability added to an App ID, cert about to expire,
+etc.), regenerate from the mini — no laptop required:
 
 ```bash
-cd ~/Coding/RunsByIP/ios
 export MATCH_PASSWORD=$(op read "op://Personal/Fastlane Match - ios-certificates/password")
-bundle exec fastlane rotate_signing
+P8=/tmp/asc-rotate.p8
+op document get "App Store Connect API Key - RRYR26DJLS" --vault Personal --out-file "$P8" --force
+chmod 600 "$P8"
+export ASC_KEY_PATH="$P8"
+cd ~/Coding/<repo>/<fastlane-dir>
+fastlane rotate_signing
+rm "$P8"
 ```
 
-The mini will pick up the new profile on the next CI run via `readonly: true`.
+CI runs pull the regenerated profile on the next build via `readonly: true`.
 
 ## Required GitHub repository secrets
 
-Repo: `IsaacAPerez/RunsByIP` → Settings → Secrets and variables → Actions.
+Each iOS repo's `testflight.yml` (or `beta.yml`) needs these. They're synced
+from 1Password via `~/.openclaw/scripts/sync-gh-secrets.sh` — don't edit GH
+Secrets by hand; rotate the value in 1P and run sync.
 
-| Secret | Where to get it | Notes |
+| Secret | 1P source | Notes |
 |---|---|---|
-| `KEYCHAIN_PASSWORD` | Already set | Mini's `login.keychain` password. |
-| `BB_PASSWORD` | Already set | iMessage notify script. |
-| `MATCH_PASSWORD` | 1Password → "Fastlane Match - ios-certificates" → password field | Decrypts `ios-certificates`. |
-| `MATCH_GIT_BASIC_AUTHORIZATION` | See "Match git access" below | Lets the runner read `ios-certificates`. |
-| `ASC_KEY_ID` | 1Password → "App Store Connect API Key - RRYR26DJLS" → Key ID field | Currently `RRYR26DJLS`. |
-| `ASC_ISSUER_ID` | Same 1Password item → Issuer ID field | Currently `d0ded18b-a760-49f9-82b3-135bb3b65703`. |
-| `ASC_KEY_PATH` | Set to `/Users/isaacperez/.appstoreconnect/private_keys/AuthKey_RRYR26DJLS.p8` | Path on the mini, not laptop. |
+| `BB_PASSWORD` | `Dashboard - BB_PASSWORD` / password | iMessage notify script. |
+| `MATCH_PASSWORD` | `Fastlane Match - ios-certificates` / password | Decrypts `ios-certificates`. |
+| `ASC_KEY_ID` | `App Store Connect API Key - RRYR26DJLS` / Key ID | Currently `RRYR26DJLS`. |
+| `ASC_ISSUER_ID` | same item / Issuer ID | Currently `d0ded18b-…`. |
+
+**Eliminated** (don't add these back without good reason):
+- `KEYCHAIN_PASSWORD` — runner inherits the user-session unlocked login
+  keychain (auto-login + no-timeout). The "Unlock keychain" step is gone.
+- `MATCH_GIT_BASIC_AUTHORIZATION` — the mini's `gh auth git-credential` helper
+  authenticates Match's git clone of `ios-certificates`; no explicit PAT.
+- `ASC_KEY_PATH` — workflow's "Materialize ASC API key" step writes the
+  `.p8` fresh into `$RUNNER_TEMP` per build and exports the path via
+  `$GITHUB_ENV`. No static path needed.
 
 ### Match git access
 
-`ios-certificates` is private. The default `GITHUB_TOKEN` only grants access
-to the repo running the workflow, so Match needs an explicit credential.
+`ios-certificates` is private. The mini's `~/.config/git` configures
+`gh auth git-credential` as the credential helper globally, so any
+`git clone` from a runner job authenticates as Isaac via gh's stored token.
+No explicit PAT injection required (this is why
+`MATCH_GIT_BASIC_AUTHORIZATION` was eliminated).
+
+If you ever set up a runner on a new host, run `gh auth login` once so the
+credential helper is configured, then Match's clone Just Works.
+
+The historical PAT-encoding recipe (kept for reference if you ever DO need
+to inject auth explicitly):
 
 1. Create a fine-grained PAT on github.com:
    - Resource owner: `IsaacAPerez`
