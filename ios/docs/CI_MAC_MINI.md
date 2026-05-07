@@ -146,8 +146,31 @@ bundle exec fastlane sync_signing
 After that, Xcode/Match has the cert and profile locally. CI runs no longer
 need interactive input — they pull from the encrypted repo on every run.
 
+### How CI sees rbenv Ruby
+
+The GitHub Actions runner's PATH (`~/actions-runner-runsbyip/.path`) is *not*
+edited to include `~/.rbenv/shims`. Instead, `testflight.yml` has an
+`Activate rbenv Ruby` step that prepends the shims to `GITHUB_PATH` before
+`bundle install` runs:
+
+```yaml
+- name: Activate rbenv Ruby
+  run: |
+    echo "$HOME/.rbenv/shims" >> "$GITHUB_PATH"
+    echo "$HOME/.rbenv/bin" >> "$GITHUB_PATH"
+```
+
+This keeps the rbenv requirement self-documenting in the workflow and
+survives a runner reinstall — as long as `rbenv install <version>` from the
+setup section above has been run on the host.
+
 ## Common runner problems
 
+- **`Could not find 'bundler' (X.Y.Z)` from `/System/.../Ruby/2.6/...`** →
+  the runner is using system Ruby because `~/.rbenv/shims` isn't on PATH
+  for the job. Either rbenv isn't installed (run "One-time mini setup") or
+  the `Activate rbenv Ruby` workflow step was removed. The shim path must
+  be exported via `GITHUB_PATH`, not via the runner's `.path` file.
 - **`MATCH_PASSWORD` empty** → secret not set on the repo, or workflow not
   passing it through `env:`. Both already handled in `testflight.yml` —
   just ensure the secret exists.
