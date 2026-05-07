@@ -30,6 +30,9 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
+      - name: Install Bundler dependencies
+        run: bundle install
+
       - name: Resolve Swift Packages
         run: xcodebuild -resolvePackageDependencies -project RunsByIP.xcodeproj -scheme RunsByIP
 
@@ -38,4 +41,10 @@ jobs:
           LANG: en_US.UTF-8
           LC_ALL: en_US.UTF-8
           BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
-        run: fastlane beta
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_PATH: ${{ secrets.ASC_KEY_PATH }}
+        run: bundle exec fastlane beta
