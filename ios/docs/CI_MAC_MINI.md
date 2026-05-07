@@ -25,10 +25,27 @@ it to TestFlight via Fastlane. No human is in the loop after the push.
 | Fastlane lanes | `beta` (build+upload), `sync_signing` (pull profile), `rotate_signing` (regenerate) |
 | Match profile name | `match AppStore com.isaacperez.runsbyip` |
 
-## 1Password items (vault: Personal)
+## Secret-management policy
 
-These are the only sources of truth for secrets. Don't paste secrets into
-git, GitHub Issues, or terminal scrollback. Read with `op` instead.
+**1Password (vault: `Personal`) is the only source of truth for secrets.**
+Apply this rule to anything you do in this repo, not just signing:
+
+- Need a value? `op read "op://Personal/<item>/<field>"`. Don't paste secrets
+  into git, GitHub Issues, terminal scrollback, or chat transcripts.
+- Generated or received a new secret (PAT, API key, password, signing
+  passphrase, OAuth client secret, etc.)? Create the 1Password item
+  **before** putting the value anywhere else. Tag with `fastlane`, `ios`,
+  `signing`, or whatever's relevant.
+- Setting a GitHub Actions secret? Save it to 1Password first, then mirror
+  to `gh secret set` so it's recoverable if the GitHub copy is lost.
+- Rotating? Update 1Password and every consumer (GitHub secrets, the mini's
+  filesystem, etc.) atomically.
+- The 1Password CLI is signed in via the desktop app on this machine and
+  on the laptop. If `op vault list` ever fails, sign in via the GUI app
+  (Tailscale Screen Sharing on the mini) — don't fall back to env-var
+  hardcodes.
+
+### Existing items (vault: Personal)
 
 - **`Fastlane Match - ios-certificates`** — passphrase that decrypts the
   signing repo. Read with: `op read "op://Personal/Fastlane Match - ios-certificates/password"`
@@ -36,6 +53,9 @@ git, GitHub Issues, or terminal scrollback. Read with `op` instead.
   `.p8` private key plus Key ID + Issuer ID metadata.
 - **`GitHub PAT — ios-certificates read`** — fine-grained PAT used by the
   runner to clone the signing repo.
+
+When you add new ones, append them to this list in the same commit so the
+inventory stays current.
 
 ## Recent context (May 2026)
 
