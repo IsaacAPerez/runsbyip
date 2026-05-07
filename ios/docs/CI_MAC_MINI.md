@@ -67,6 +67,25 @@ inventory stays current.
   live. Bump `ios/project.yml` (not just `pbxproj`) when you raise it
   again — `xcodegen generate` rewrites `pbxproj` in CI.
 
+## ASC API key is shared across all 4 iOS apps
+
+The same `.p8` (`AuthKey_RRYR26DJLS.p8`, key id `RRYR26DJLS`, issuer
+`d0ded18b-a760-49f9-82b3-135bb3b65703`) signs every iOS app on this team:
+
+| App | Fastfile | API_KEY_PATH |
+|---|---|---|
+| RunsByIP | [ios/fastlane/Fastfile](../fastlane/Fastfile) | `~/.appstoreconnect/private_keys/AuthKey_RRYR26DJLS.p8` |
+| CurbSide | `ios/fastlane/Fastfile` (in `IsaacAPerez/CurbSide`) | same |
+| LukaDashboard | `App/fastlane/Fastfile` (in `IsaacAPerez/LukaDashboard`) | same |
+| RoommateApp | `fastlane/Fastfile` (in `IsaacAPerez/RoommateApp`) | same |
+
+All four read from `~/.appstoreconnect/private_keys/`, the canonical location
+Apple's tools use. To rotate the key: regenerate in App Store Connect, update
+the 1Password item, then re-run the bootstrap one-liner under "One-time mini
+setup" on each runner host. The legacy `~/CurbSide-CI-Files/AuthKey_*.p8`
+copy is no longer referenced by any Fastfile and can be removed once you've
+verified all 4 CIs are green.
+
 ## How signing works
 
 - Distribution cert + provisioning profile live encrypted in
@@ -130,9 +149,10 @@ brew install rbenv ruby-build xcodegen 1password-cli gh
 rbenv install 3.3.0 && rbenv global 3.3.0
 gem install bundler
 
-# ASC API key (do this from a clipboard paste of the .p8 contents from 1Password)
+# ASC API key — fetch the .p8 attachment directly from 1Password
 mkdir -p ~/.appstoreconnect/private_keys
-pbpaste > ~/.appstoreconnect/private_keys/AuthKey_RRYR26DJLS.p8
+op document get "App Store Connect API Key - RRYR26DJLS" --vault Personal \
+  --out-file ~/.appstoreconnect/private_keys/AuthKey_RRYR26DJLS.p8
 chmod 600 ~/.appstoreconnect/private_keys/AuthKey_RRYR26DJLS.p8
 
 # Sanity check Match can pull

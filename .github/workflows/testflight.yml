@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'ios/**'
+      - '!ios/docs/**'
+      - '.github/workflows/testflight.yml'
   workflow_dispatch:
 
 jobs:
