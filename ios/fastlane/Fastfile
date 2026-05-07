@@ -19,10 +19,15 @@ platform :ios do
       xcodeproj: "RunsByIP.xcodeproj"
     )
 
+    # ASC_KEY_PATH must be set by CI (or the developer) — typically the
+    # workflow's "Materialize ASC API key from 1Password" step writes the
+    # .p8 to $RUNNER_TEMP and exports the path. No on-disk fallback: every
+    # build pulls fresh from 1P, then the temp file is auto-cleaned at job end.
+    asc_key_path = ENV.fetch("ASC_KEY_PATH") { raise "ASC_KEY_PATH not set — did the 'Materialize ASC API key' step run?" }
     api_key = app_store_connect_api_key(
       key_id: ENV["ASC_KEY_ID"] || "RRYR26DJLS",
       issuer_id: ENV["ASC_ISSUER_ID"] || "d0ded18b-a760-49f9-82b3-135bb3b65703",
-      key_filepath: ENV["ASC_KEY_PATH"] || File.expand_path("~/.appstoreconnect/private_keys/AuthKey_RRYR26DJLS.p8"),
+      key_filepath: asc_key_path,
       duration: 1200,
       in_house: false
     )
