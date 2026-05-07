@@ -1,0 +1,6 @@
+git_url("https://github.com/IsaacAPerez/ios-certificates")
+storage_mode("git")
+type("appstore")
+app_identifier(["com.isaacperez.runsbyip"])
+username("iperez2435@gmail.com")
+team_id("K98N9692X9")

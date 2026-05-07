@@ -27,15 +27,35 @@ platform :ios do
       in_house: false
     )
 
+    match(
+      type: "appstore",
+      app_identifier: "com.isaacperez.runsbyip",
+      readonly: !ENV["MATCH_FORCE"],
+      api_key: api_key
+    )
+
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "RunsByIP.xcodeproj",
+      team_id: "K98N9692X9",
+      code_sign_identity: "Apple Distribution",
+      bundle_identifier: "com.isaacperez.runsbyip",
+      profile_name: "match AppStore com.isaacperez.runsbyip",
+      build_configurations: ["Release"],
+      targets: ["RunsByIP"]
+    )
+
     build_app(
       scheme: "RunsByIP",
       configuration: "Release",
       export_method: "app-store",
-      xcargs: "-allowProvisioningUpdates -allowProvisioningDeviceRegistration",
       export_options: {
         method: "app-store",
         teamID: "K98N9692X9",
-        signingStyle: "automatic"
+        signingStyle: "manual",
+        provisioningProfiles: {
+          "com.isaacperez.runsbyip" => "match AppStore com.isaacperez.runsbyip"
+        }
       }
     )
 
@@ -46,6 +66,16 @@ platform :ios do
     )
 
     puts "✅ Uploaded to TestFlight!"
+  end
+
+  desc "Sync signing certs and profiles from the shared certs repo (read-only)"
+  lane :sync_signing do
+    match(type: "appstore", app_identifier: "com.isaacperez.runsbyip", readonly: true)
+  end
+
+  desc "Generate or rotate signing certs and profiles in the shared certs repo"
+  lane :rotate_signing do
+    match(type: "appstore", app_identifier: "com.isaacperez.runsbyip", readonly: false)
   end
 
 end
