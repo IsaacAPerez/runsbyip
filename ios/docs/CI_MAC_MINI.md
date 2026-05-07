@@ -1,7 +1,51 @@
 # Mac Mini CI Handoff
 
-The headless Mac mini hosts a self-hosted GitHub Actions runner that builds
-and uploads to TestFlight on every push to `main` that touches `ios/**`.
+If you're a Claude session opening this on the mini, read this whole file
+before doing anything signing- or release-related. The mini is wired into
+real Apple Developer / App Store Connect / GitHub infrastructure; mistakes
+here cost real time (revoked certs, broken builds for other apps).
+
+## TL;DR — what the mini does
+
+The Mac mini hosts a self-hosted GitHub Actions runner. On every push to
+`main` that touches `ios/**`, the runner archives the iOS app and uploads
+it to TestFlight via Fastlane. No human is in the loop after the push.
+
+## Fast facts
+
+| Thing | Value |
+|---|---|
+| App bundle ID | `com.isaacperez.runsbyip` |
+| App Store Connect team ID | `K98N9692X9` (Isaac Perez) |
+| Apple Developer login | `iperez2435@gmail.com` |
+| Source repo | `https://github.com/IsaacAPerez/RunsByIP` |
+| Signing repo (Match) | `https://github.com/IsaacAPerez/ios-certificates` |
+| Runner work dir on mini | `/Users/isaacperez/actions-runner-runsbyip/` |
+| ASC API key path on mini | `/Users/isaacperez/.appstoreconnect/private_keys/AuthKey_RRYR26DJLS.p8` |
+| Fastlane lanes | `beta` (build+upload), `sync_signing` (pull profile), `rotate_signing` (regenerate) |
+| Match profile name | `match AppStore com.isaacperez.runsbyip` |
+
+## 1Password items (vault: Personal)
+
+These are the only sources of truth for secrets. Don't paste secrets into
+git, GitHub Issues, or terminal scrollback. Read with `op` instead.
+
+- **`Fastlane Match - ios-certificates`** — passphrase that decrypts the
+  signing repo. Read with: `op read "op://Personal/Fastlane Match - ios-certificates/password"`
+- **`App Store Connect API Key - RRYR26DJLS`** — document, contains the
+  `.p8` private key plus Key ID + Issuer ID metadata.
+- **`GitHub PAT — ios-certificates read`** — fine-grained PAT used by the
+  runner to clone the signing repo.
+
+## Recent context (May 2026)
+
+- The pre-Match world used Xcode automatic signing. That broke when a new
+  capability (Apple Pay) was added to the App ID — Xcode's local profile
+  cache went stale and shipped a TestFlight build without Apple Pay
+  entitled. Today's switch to Match fixes that class of bug.
+- App Store marketing version 1.0.2 is **closed** for new builds; 1.0.3 is
+  live. Bump `ios/project.yml` (not just `pbxproj`) when you raise it
+  again — `xcodegen generate` rewrites `pbxproj` in CI.
 
 ## How signing works
 
