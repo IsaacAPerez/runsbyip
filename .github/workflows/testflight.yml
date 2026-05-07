@@ -23,11 +23,11 @@ jobs:
         with:
           clean: true
 
-      - name: Unlock Keychain
-        run: |
-          security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" ~/Library/Keychains/login.keychain-db
-          security set-keychain-settings ~/Library/Keychains/login.keychain-db
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${{ secrets.KEYCHAIN_PASSWORD }}" ~/Library/Keychains/login.keychain-db
+      # Keychain unlock dropped: the runner inherits the user session's
+      # already-unlocked login keychain (macOS auto-login + no-timeout
+      # keychain settings + apple-tool/apple/codesign already on the
+      # partition list from prior runs). Eliminates the need for a
+      # KEYCHAIN_PASSWORD GH Secret.
 
       - name: Generate Xcode Project
         run: xcodegen generate
@@ -49,7 +49,6 @@ jobs:
           LC_ALL: en_US.UTF-8
           BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          MATCH_KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
