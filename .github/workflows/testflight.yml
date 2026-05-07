@@ -49,7 +49,12 @@ jobs:
           LC_ALL: en_US.UTF-8
           BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          # MATCH_GIT_BASIC_AUTHORIZATION removed — the self-hosted runner
+          # already has gh CLI auth + the gh-credential helper configured
+          # globally in ~/.config/git, so Match's git clone of
+          # ios-certificates authenticates automatically. If this run fails
+          # at the match step with a 403/401, restore this env var (and
+          # the underlying GH Secret + 1P item).
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_PATH: ${{ secrets.ASC_KEY_PATH }}
