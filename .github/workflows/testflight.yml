@@ -30,6 +30,11 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
+      - name: Activate rbenv Ruby
+        run: |
+          echo "$HOME/.rbenv/shims" >> "$GITHUB_PATH"
+          echo "$HOME/.rbenv/bin" >> "$GITHUB_PATH"
+
       - name: Install Bundler dependencies
         run: bundle install
 
