@@ -132,6 +132,24 @@ class AscClient
     raise "Failed to attach build #{build_id} to version #{version_id} (#{code}): #{body}" unless code == 204
   end
 
+  # PATCH the en-US localization's whatsNew field. Required for first-time
+  # submission of a new version; Apple's reviewSubmissions endpoint rejects
+  # versions with missing required localized attributes.
+  def set_release_notes(version_id:, text:, locale: "en-US")
+    code, body = request(:get, "/v1/appStoreVersions/#{version_id}/appStoreVersionLocalizations")
+    raise "Failed to fetch localizations for version #{version_id} (#{code}): #{body}" unless code == 200
+    loc = (JSON.parse(body)["data"] || []).find { |l| l.dig("attributes", "locale") == locale }
+    raise "No #{locale} localization for version #{version_id}" unless loc
+    code, body = request(:patch, "/v1/appStoreVersionLocalizations/#{loc['id']}", {
+      data: {
+        type: "appStoreVersionLocalizations",
+        id: loc['id'],
+        attributes: { whatsNew: text }
+      }
+    })
+    raise "Failed to set whatsNew on localization #{loc['id']} (#{code}): #{body}" unless code == 200
+  end
+
   # Submit via the modern reviewSubmissions flow (the legacy
   # appStoreVersionSubmissions endpoint only accepts DELETE since 2024).
   def submit_for_review(app_id:, platform: "IOS", version_id:)
@@ -317,6 +335,14 @@ platform :ios do
       UI.message("Attaching build #{build_id} to version #{info[:id]}…")
       client.attach_build(version_id: info[:id], build_id: build_id)
     end
+
+    # Push release notes (whatsNew) to the en-US localization so Apple's
+    # reviewSubmissions endpoint doesn't reject for missing required fields.
+    notes_path = File.expand_path("metadata/en-US/release_notes.txt", __dir__)
+    release_notes = File.exist?(notes_path) ? File.read(notes_path).strip : ""
+    release_notes = "Bug fixes and improvements." if release_notes.empty?
+    UI.message("Setting release notes (#{release_notes.length} chars)…")
+    client.set_release_notes(version_id: info[:id], text: release_notes)
 
     submission_id = client.submit_for_review(app_id: ASC_APP_ID, version_id: info[:id])
     UI.success("Submitted for review. reviewSubmission id: #{submission_id}")
