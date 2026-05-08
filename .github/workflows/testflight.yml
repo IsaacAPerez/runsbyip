@@ -8,6 +8,11 @@ on:
       - '!ios/docs/**'
       - '.github/workflows/testflight.yml'
   workflow_dispatch:
+    inputs:
+      submit_for_review:
+        description: 'After TestFlight upload, submit the latest build for App Store review'
+        type: boolean
+        default: false
 
 jobs:
   deploy:
@@ -81,3 +86,12 @@ jobs:
           fi
           git commit -m "chore(ios): bump RunsByIP marketing version to ${MARKETING_BUMPED} [skip ci]"
           git push
+
+      - name: Submit for App Store review
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.submit_for_review
+        env:
+          LANG: en_US.UTF-8
+          LC_ALL: en_US.UTF-8
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: bundle exec fastlane submit

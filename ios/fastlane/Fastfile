@@ -35,6 +35,21 @@ class AscClient
     )
   end
 
+  def request(method, path, body = nil)
+    uri = URI("#{BASE}#{path}")
+    req = case method
+    when :get    then Net::HTTP::Get.new(uri)
+    when :post   then Net::HTTP::Post.new(uri)
+    when :patch  then Net::HTTP::Patch.new(uri)
+    when :delete then Net::HTTP::Delete.new(uri)
+    end
+    req["Authorization"] = "Bearer #{token}"
+    req["Content-Type"] = "application/json"
+    req.body = body.to_json if body
+    resp = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |h| h.request(req) }
+    [resp.code.to_i, resp.body.to_s]
+  end
+
   TRAIN_OPEN_STATES = %w[
     PREPARE_FOR_SUBMISSION
     DEVELOPER_REJECTED
@@ -48,18 +63,109 @@ class AscClient
   # when we're confident the train is closed — failures default to true
   # so we never refuse to ship over a flaky API call.
   def train_open?(app_id:, version_string:, platform: "IOS")
-    uri = URI("#{BASE}/v1/apps/#{app_id}/appStoreVersions" \
-              "?filter[platform]=#{platform}" \
-              "&filter[versionString]=#{version_string}&limit=1")
-    req = Net::HTTP::Get.new(uri)
-    req["Authorization"] = "Bearer #{token}"
-    resp = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |h| h.request(req) }
-    return true unless resp.code.to_i == 200
-    data = JSON.parse(resp.body)
+    code, body = request(
+      :get,
+      "/v1/apps/#{app_id}/appStoreVersions" \
+      "?filter[platform]=#{platform}" \
+      "&filter[versionString]=#{version_string}&limit=1"
+    )
+    return true unless code == 200
+    data = JSON.parse(body)
     v = (data["data"] || []).first
     return true unless v
     state = v.dig("attributes", "appStoreState").to_s
     TRAIN_OPEN_STATES.include?(state)
+  end
+
+  # Look up the editable App Store Version (if any) for a given marketing
+  # version. Returns { id:, state:, build_id: } or nil.
+  def fetch_editable_version(app_id:, version_string:, platform: "IOS")
+    code, body = request(
+      :get,
+      "/v1/apps/#{app_id}/appStoreVersions" \
+      "?filter[platform]=#{platform}" \
+      "&filter[versionString]=#{version_string}" \
+      "&include=build&limit=5"
+    )
+    return nil unless code == 200
+    data = JSON.parse(body)
+    v = (data["data"] || []).first
+    return nil unless v
+    build_id = v.dig("relationships", "build", "data", "id")
+    { id: v["id"], state: v["attributes"]["appStoreState"], build_id: build_id }
+  end
+
+  # Create an editable appStoreVersion for the given marketing version.
+  def create_app_store_version(app_id:, version_string:, platform: "IOS", release_type: "MANUAL")
+    code, body = request(:post, "/v1/appStoreVersions", {
+      data: {
+        type: "appStoreVersions",
+        attributes: { platform: platform, versionString: version_string, releaseType: release_type },
+        relationships: { app: { data: { type: "apps", id: app_id } } }
+      }
+    })
+    raise "Failed to create appStoreVersion #{version_string} (#{code}): #{body}" unless code == 201
+    JSON.parse(body).dig("data", "id")
+  end
+
+  # Find the latest VALID TestFlight build for a marketing version.
+  def latest_valid_build(app_id:, version_string:)
+    code, body = request(
+      :get,
+      "/v1/builds" \
+      "?filter[app]=#{app_id}" \
+      "&filter[preReleaseVersion.version]=#{version_string}" \
+      "&filter[processingState]=VALID" \
+      "&sort=-uploadedDate&limit=1"
+    )
+    return nil unless code == 200
+    JSON.parse(body).dig("data", 0, "id")
+  end
+
+  # Attach a build to an appStoreVersion via the relationships endpoint.
+  def attach_build(version_id:, build_id:)
+    code, body = request(
+      :patch,
+      "/v1/appStoreVersions/#{version_id}/relationships/build",
+      { data: { type: "builds", id: build_id } }
+    )
+    raise "Failed to attach build #{build_id} to version #{version_id} (#{code}): #{body}" unless code == 204
+  end
+
+  # Submit via the modern reviewSubmissions flow (the legacy
+  # appStoreVersionSubmissions endpoint only accepts DELETE since 2024).
+  def submit_for_review(app_id:, platform: "IOS", version_id:)
+    code, body = request(:post, "/v1/reviewSubmissions", {
+      data: {
+        type: "reviewSubmissions",
+        attributes: { platform: platform },
+        relationships: { app: { data: { type: "apps", id: app_id } } }
+      }
+    })
+    raise "Failed to create reviewSubmission (#{code}): #{body}" unless code == 201
+    submission_id = JSON.parse(body).dig("data", "id")
+
+    code, body = request(:post, "/v1/reviewSubmissionItems", {
+      data: {
+        type: "reviewSubmissionItems",
+        relationships: {
+          reviewSubmission: { data: { type: "reviewSubmissions", id: submission_id } },
+          appStoreVersion:  { data: { type: "appStoreVersions",  id: version_id } }
+        }
+      }
+    })
+    raise "Failed to add reviewSubmissionItem (#{code}): #{body}" unless code == 201
+
+    code, body = request(:patch, "/v1/reviewSubmissions/#{submission_id}", {
+      data: {
+        type: "reviewSubmissions",
+        id: submission_id,
+        attributes: { submitted: true }
+      }
+    })
+    raise "Failed to submit reviewSubmission (#{code}): #{body}" unless code == 200
+
+    submission_id
   end
 end
 
@@ -177,6 +283,29 @@ platform :ios do
     end
 
     puts "✅ Uploaded to TestFlight!"
+  end
+
+  desc "Submit the latest TestFlight build for App Store review (no metadata sync — assumes ASC has current metadata + screenshots)"
+  lane :submit do
+    asc_key_path = ENV.fetch("ASC_KEY_PATH") { raise "ASC_KEY_PATH not set" }
+    client = asc_client(asc_key_path)
+    version = current_marketing_version_from_yml
+
+    info = client.fetch_editable_version(app_id: ASC_APP_ID, version_string: version)
+    if info.nil?
+      UI.message("No App Store version for #{version} — creating draft (releaseType=MANUAL)…")
+      version_id = client.create_app_store_version(app_id: ASC_APP_ID, version_string: version)
+      info = { id: version_id, state: "PREPARE_FOR_SUBMISSION", build_id: nil }
+    end
+    if info[:build_id].nil?
+      build_id = client.latest_valid_build(app_id: ASC_APP_ID, version_string: version)
+      UI.user_error!("No VALID TestFlight build for #{version}. Run `fastlane beta` first.") if build_id.nil?
+      UI.message("Attaching build #{build_id} to version #{info[:id]}…")
+      client.attach_build(version_id: info[:id], build_id: build_id)
+    end
+
+    submission_id = client.submit_for_review(app_id: ASC_APP_ID, version_id: info[:id])
+    UI.success("Submitted for review. reviewSubmission id: #{submission_id}")
   end
 
   desc "Sync signing certs and profiles from the shared certs repo (read-only)"
