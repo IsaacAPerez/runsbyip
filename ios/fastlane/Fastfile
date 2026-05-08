@@ -288,6 +288,11 @@ platform :ios do
   desc "Submit the latest TestFlight build for App Store review (no metadata sync — assumes ASC has current metadata + screenshots)"
   lane :submit do
     asc_key_path = ENV.fetch("ASC_KEY_PATH") { raise "ASC_KEY_PATH not set" }
+    api_key = app_store_connect_api_key(
+      key_id: API_KEY_ID,
+      issuer_id: API_ISSUER_ID,
+      key_filepath: asc_key_path
+    )
     client = asc_client(asc_key_path)
     version = current_marketing_version_from_yml
 
@@ -299,7 +304,16 @@ platform :ios do
     end
     if info[:build_id].nil?
       build_id = client.latest_valid_build(app_id: ASC_APP_ID, version_string: version)
-      UI.user_error!("No VALID TestFlight build for #{version}. Run `fastlane beta` first.") if build_id.nil?
+      if build_id.nil?
+        UI.message("No VALID TestFlight build yet for #{version} — waiting for Apple to finish processing (up to 30 min)…")
+        wait_for_build_processing(
+          api_key: api_key,
+          app_identifier: APP_IDENTIFIER,
+          timeout_duration: 1800
+        )
+        build_id = client.latest_valid_build(app_id: ASC_APP_ID, version_string: version)
+        UI.user_error!("Build never reached VALID state for #{version}. Run `fastlane beta` first or check ASC for processing errors.") if build_id.nil?
+      end
       UI.message("Attaching build #{build_id} to version #{info[:id]}…")
       client.attach_build(version_id: info[:id], build_id: build_id)
     end
