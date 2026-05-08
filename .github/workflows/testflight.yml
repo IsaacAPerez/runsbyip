@@ -40,15 +40,9 @@ jobs:
           echo "$HOME/.rbenv/bin" >> "$GITHUB_PATH"
 
       - name: Materialize ASC API key from 1Password
-        run: |
-          # Pull the .p8 fresh from 1P each build. $RUNNER_TEMP is wiped
-          # at the end of the job, so the file is short-lived by design.
-          /opt/homebrew/bin/op document get "App Store Connect API Key - RRYR26DJLS" \
-            --vault Personal \
-            --out-file "$RUNNER_TEMP/AuthKey_RRYR26DJLS.p8" \
-            --force
-          chmod 600 "$RUNNER_TEMP/AuthKey_RRYR26DJLS.p8"
-          echo "ASC_KEY_PATH=$RUNNER_TEMP/AuthKey_RRYR26DJLS.p8" >> "$GITHUB_ENV"
+        env:
+          BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
+        run: /Users/isaacperez/.openclaw/scripts/ci-materialize-asc-key.sh
 
       - name: Install Bundler dependencies
         run: bundle install
