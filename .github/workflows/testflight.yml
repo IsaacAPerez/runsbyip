@@ -13,6 +13,8 @@ jobs:
   deploy:
     name: Build & Upload to TestFlight
     runs-on: self-hosted
+    permissions:
+      contents: write  # let the bumped-marketing-version commit step push back to main
     defaults:
       run:
         working-directory: ios
@@ -71,3 +73,17 @@ jobs:
           # ASC_KEY_PATH is set by the 'Materialize ASC API key' step above
           # (via $GITHUB_ENV), pointing at $RUNNER_TEMP. No GH Secret needed.
         run: bundle exec fastlane beta
+
+      - name: Commit bumped marketing version
+        if: success() && env.MARKETING_BUMPED != ''
+        working-directory: ${{ github.workspace }}
+        run: |
+          git config user.name "ci-bot"
+          git config user.email "ci@isaacperez.dev"
+          git add -f ios/project.yml
+          if git diff --cached --quiet; then
+            echo "project.yml not modified — skipping commit"
+            exit 0
+          fi
+          git commit -m "chore(ios): bump RunsByIP marketing version to ${MARKETING_BUMPED} [skip ci]"
+          git push

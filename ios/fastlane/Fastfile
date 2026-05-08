@@ -1,6 +1,93 @@
 default_platform(:ios)
 
 NOTIFY_SCRIPT = File.expand_path("../scripts/notify_ci.sh", __dir__)
+PROJECT_DIR = File.expand_path("..", __dir__)
+PROJECT_YML = "#{PROJECT_DIR}/project.yml"
+APP_IDENTIFIER = "com.isaacperez.runsbyip"
+ASC_APP_ID = "6761027495"
+API_KEY_ID = "RRYR26DJLS"
+API_ISSUER_ID = "d0ded18b-a760-49f9-82b3-135bb3b65703"
+
+# Compact ASC API client — just enough to predict whether a marketing
+# version's TestFlight train is still accepting uploads. Mirrors the
+# `train_open?` helper from CurbSide / RoommateApp Fastfiles.
+class AscClient
+  require 'jwt'
+  require 'net/http'
+  require 'json'
+  require 'uri'
+
+  BASE = "https://api.appstoreconnect.apple.com".freeze
+
+  def initialize(key_id:, issuer_id:, key_path:)
+    @key_id = key_id
+    @issuer_id = issuer_id
+    @private_key = OpenSSL::PKey::EC.new(File.read(key_path))
+  end
+
+  def token
+    now = Time.now.to_i
+    JWT.encode(
+      { iss: @issuer_id, iat: now, exp: now + 1200, aud: "appstoreconnect-v1" },
+      @private_key,
+      "ES256",
+      { kid: @key_id, typ: "JWT" }
+    )
+  end
+
+  TRAIN_OPEN_STATES = %w[
+    PREPARE_FOR_SUBMISSION
+    DEVELOPER_REJECTED
+    REJECTED
+    METADATA_REJECTED
+    INVALID_BINARY
+  ].freeze
+
+  # Returns true when version_string either has no appStoreVersion yet
+  # (a brand-new train) or is in an editable state. Returns false only
+  # when we're confident the train is closed — failures default to true
+  # so we never refuse to ship over a flaky API call.
+  def train_open?(app_id:, version_string:, platform: "IOS")
+    uri = URI("#{BASE}/v1/apps/#{app_id}/appStoreVersions" \
+              "?filter[platform]=#{platform}" \
+              "&filter[versionString]=#{version_string}&limit=1")
+    req = Net::HTTP::Get.new(uri)
+    req["Authorization"] = "Bearer #{token}"
+    resp = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |h| h.request(req) }
+    return true unless resp.code.to_i == 200
+    data = JSON.parse(resp.body)
+    v = (data["data"] || []).first
+    return true unless v
+    state = v.dig("attributes", "appStoreState").to_s
+    TRAIN_OPEN_STATES.include?(state)
+  end
+end
+
+def asc_client(api_key_path)
+  AscClient.new(key_id: API_KEY_ID, issuer_id: API_ISSUER_ID, key_path: api_key_path)
+end
+
+def current_marketing_version_from_yml
+  m = File.read(PROJECT_YML).match(/^\s*MARKETING_VERSION:\s*"([^"]+)"/)
+  raise "MARKETING_VERSION not found in #{PROJECT_YML}" unless m
+  m[1]
+end
+
+def bump_patch_version(version)
+  parts = version.split(".").map(&:to_i)
+  parts << 0 while parts.size < 3
+  parts[2] += 1
+  parts.join(".")
+end
+
+# Bumps both `MARKETING_VERSION:` and `CFBundleShortVersionString:` in
+# project.yml so xcodegen-regenerated pbxproj + Info.plist are consistent.
+def bump_marketing_in_project_yml(new_version)
+  content = File.read(PROJECT_YML)
+  content = content.sub(/^(\s*MARKETING_VERSION:\s*")[^"]*(")/, "\\1#{new_version}\\2")
+  content = content.sub(/^(\s+CFBundleShortVersionString:\s*")[^"]*(")/, "\\1#{new_version}\\2")
+  File.write(PROJECT_YML, content)
+end
 
 after_all do |lane|
   sh("#{NOTIFY_SCRIPT} #{lane} success || true")
@@ -14,22 +101,37 @@ platform :ios do
 
   desc "Build and upload to TestFlight"
   lane :beta do
-    increment_build_number(
-      build_number: Time.now.strftime("%Y%m%d%H%M"),
-      xcodeproj: "RunsByIP.xcodeproj"
-    )
-
     # ASC_KEY_PATH must be set by CI (or the developer) — typically the
     # workflow's "Materialize ASC API key from 1Password" step writes the
     # .p8 to $RUNNER_TEMP and exports the path. No on-disk fallback: every
     # build pulls fresh from 1P, then the temp file is auto-cleaned at job end.
     asc_key_path = ENV.fetch("ASC_KEY_PATH") { raise "ASC_KEY_PATH not set — did the 'Materialize ASC API key' step run?" }
     api_key = app_store_connect_api_key(
-      key_id: ENV["ASC_KEY_ID"] || "RRYR26DJLS",
-      issuer_id: ENV["ASC_ISSUER_ID"] || "d0ded18b-a760-49f9-82b3-135bb3b65703",
+      key_id: ENV["ASC_KEY_ID"] || API_KEY_ID,
+      issuer_id: ENV["ASC_ISSUER_ID"] || API_ISSUER_ID,
       key_filepath: asc_key_path,
       duration: 1200,
       in_house: false
+    )
+
+    # Auto-bump marketing version if the current train is closed in ASC.
+    # Persisted: project.yml is rewritten, xcodegen re-runs, and the CI
+    # workflow's "Commit bumped marketing version" step pushes the change
+    # back to main. Failures default to "train open" so a flaky API call
+    # never blocks a build.
+    marketing_bumped_to = nil
+    target_version = current_marketing_version_from_yml
+    unless asc_client(asc_key_path).train_open?(app_id: ASC_APP_ID, version_string: target_version)
+      bumped = bump_patch_version(target_version)
+      UI.important("Train #{target_version} is closed in ASC; bumping to #{bumped}.")
+      bump_marketing_in_project_yml(bumped)
+      sh("cd #{PROJECT_DIR} && xcodegen generate")
+      marketing_bumped_to = bumped
+    end
+
+    increment_build_number(
+      build_number: Time.now.strftime("%Y%m%d%H%M"),
+      xcodeproj: "RunsByIP.xcodeproj"
     )
 
     match(
@@ -69,6 +171,10 @@ platform :ios do
       skip_waiting_for_build_processing: true,
       notify_external_testers: false
     )
+
+    if marketing_bumped_to && ENV["GITHUB_ENV"]
+      File.open(ENV["GITHUB_ENV"], "a") { |f| f.puts "MARKETING_BUMPED=#{marketing_bumped_to}" }
+    end
 
     puts "✅ Uploaded to TestFlight!"
   end
