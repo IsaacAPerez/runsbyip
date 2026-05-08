@@ -8,6 +8,7 @@ struct CreateSessionView: View {
     @State private var time = Date()
     @State private var location = ""
     @State private var maxPlayers = 15
+    @State private var priceText = ""
     @State private var defaultPriceCents: Int?
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -24,12 +25,11 @@ struct CreateSessionView: View {
         return formatter.string(from: date)
     }
 
-    private var priceDescription: String {
-        if let defaultPriceCents {
-            return "\(defaultPriceCents.currencyDisplay) per player, from the Supabase session price default."
-        }
-
-        return "Uses the Supabase session price default when this run is created."
+    private var enteredPriceCents: Int? {
+        let trimmed = priceText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, let dollars = Decimal(string: trimmed) else { return nil }
+        let cents = NSDecimalNumber(decimal: dollars * 100).intValue
+        return cents > 0 ? cents : nil
     }
 
     var body: some View {
@@ -114,21 +114,13 @@ struct CreateSessionView: View {
 
                         // Price
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Price per Player")
+                            Text("Price per Player ($)")
                                 .font(.subheadline.bold())
                                 .foregroundColor(.appTextSecondary)
 
-                            Text(priceDescription)
-                                .font(.subheadline)
-                                .foregroundColor(.appTextSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding()
-                                .background(Color.appSurface)
-                                .cornerRadius(10)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.appBorder, lineWidth: 1)
-                                )
+                            TextField("e.g. 10", text: $priceText)
+                                .keyboardType(.decimalPad)
+                                .textFieldStyle(DarkTextFieldStyle())
                         }
 
                         // Error
@@ -156,8 +148,8 @@ struct CreateSessionView: View {
                             .foregroundColor(.appBackground)
                             .cornerRadius(AppStyle.buttonCornerRadius)
                         }
-                        .disabled(isLoading || location.isEmpty)
-                        .opacity(location.isEmpty ? 0.6 : 1)
+                        .disabled(isLoading || location.isEmpty || enteredPriceCents == nil)
+                        .opacity((location.isEmpty || enteredPriceCents == nil) ? 0.6 : 1)
                     }
                     .padding(24)
                 }
@@ -178,9 +170,17 @@ struct CreateSessionView: View {
     private func loadDefaultPrice() async {
         guard defaultPriceCents == nil else { return }
         defaultPriceCents = try? await sessionService.defaultSessionPriceCents()
+        if priceText.isEmpty, let cents = defaultPriceCents {
+            let dollars = Decimal(cents) / Decimal(100)
+            priceText = NSDecimalNumber(decimal: dollars).stringValue
+        }
     }
 
     private func createSession() {
+        guard let priceCents = enteredPriceCents else {
+            errorMessage = "Enter a valid price."
+            return
+        }
         isLoading = true
         errorMessage = nil
         Task {
@@ -190,7 +190,7 @@ struct CreateSessionView: View {
                     time: timeString,
                     location: location,
                     maxPlayers: maxPlayers,
-                    priceCents: defaultPriceCents
+                    priceCents: priceCents
                 )
                 dismiss()
             } catch {
