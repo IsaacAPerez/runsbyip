@@ -284,17 +284,25 @@ struct ChatView: View {
     }
 
     private func loadChat() async {
-        currentUserId = await chatService.currentUserId
-        isMuted = await chatService.checkMuteStatus()
+        // Kick off everything that doesn't depend on each other in parallel:
+        // auth lookups, channel subscribes, and the messages+reactions fetch.
+        // Previously this was 5+ serial round trips (~5-10s on slow LTE);
+        // now they overlap. The insert handler dedupes by id against the
+        // fetched array, and refetchSinceLastSeen on foreground catches any
+        // narrow gap if a message lands between fetch and subscribe.
+        async let userIdTask = chatService.currentUserId
+        async let muteTask = chatService.checkMuteStatus()
+        async let subscribeTask: () = chatService.subscribeToMessages()
+
         do {
-            // Subscribe first so we don't miss any messages arriving between
-            // the fetch and when the channel connects. The insert handler
-            // dedupes by id against the fetched array.
-            await chatService.subscribeToMessages()
             try await chatService.fetchMessages()
         } catch {
             errorMessage = error.localizedDescription
         }
+
+        currentUserId = await userIdTask
+        isMuted = await muteTask
+        _ = await subscribeTask
         isLoading = false
     }
 

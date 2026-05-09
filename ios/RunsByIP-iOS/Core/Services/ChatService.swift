@@ -31,15 +31,26 @@ final class ChatService: ObservableObject {
 
     func fetchMessages() async throws {
         do {
-            messages = try await supabase
+            // Messages and reactions are independent queries — fetch them in
+            // parallel so the round trips overlap. Cuts initial chat load by
+            // one network hop.
+            async let messagesTask: [ChatMessage] = supabase
                 .from("messages_with_profiles")
                 .select()
                 .order("created_at", ascending: true)
                 .execute()
                 .value
-            rebuildAvatarCache(from: messages)
+            async let reactionsTask: [MessageReactionRecord] = supabase
+                .from("message_reactions")
+                .select()
+                .order("created_at", ascending: true)
+                .execute()
+                .value
 
-            try await fetchReactions()
+            messages = try await messagesTask
+            rebuildAvatarCache(from: messages)
+            reactionRecords = try await reactionsTask
+            rebuildReactions()
         } catch {
             throw AppError.networkError(error.localizedDescription)
         }
@@ -200,11 +211,14 @@ final class ChatService: ObservableObject {
     /// Sets up all three realtime channels and awaits each channel's initial
     /// subscription. Broadcasting (used for the typing indicator) only works
     /// once the channel is subscribed — firing-and-forgetting the subscribe
-    /// lost early keystrokes.
+    /// lost early keystrokes. Subscribes run in parallel: each channel takes
+    /// ~500ms-2s to confirm, so doing them concurrently cuts cold-start time
+    /// roughly 3x.
     func subscribeToMessages() async {
-        await subscribeToMessageInserts()
-        await subscribeToReactionChanges()
-        await subscribeToTypingPresence()
+        async let messages: () = subscribeToMessageInserts()
+        async let reactions: () = subscribeToReactionChanges()
+        async let typing: () = subscribeToTypingPresence()
+        _ = await (messages, reactions, typing)
     }
 
     func setTyping(isTyping: Bool) {
