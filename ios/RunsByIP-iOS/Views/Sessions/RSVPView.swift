@@ -24,6 +24,7 @@ struct RSVPView: View {
     @State private var showApplePaySheet = false
     @State private var confirmedCount = 0
     @State private var loadingMethod: String?
+    @State private var didSucceed = false
 
     private var shortDate: String {
         guard let parsed = session.parsedDate else { return session.date }
@@ -44,6 +45,12 @@ struct RSVPView: View {
         NavigationStack {
             ZStack {
                 Color.appBackground.ignoresSafeArea()
+
+                if didSucceed {
+                    successOverlay
+                        .transition(.opacity)
+                        .zIndex(1)
+                }
 
                 ScrollView {
                     VStack(spacing: 28) {
@@ -168,7 +175,14 @@ struct RSVPView: View {
                 guard let result else { return }
                 switch result {
                 case .success:
-                    dismiss()
+                    withAnimation(.easeOut(duration: 0.2)) { didSucceed = true }
+                    Task {
+                        // Brief pause so the user sees the confirmation and the
+                        // Stripe webhook has time to insert the RSVP row before
+                        // HomeView refetches on dismiss.
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        dismiss()
+                    }
                 case .failed(let message):
                     errorMessage = message
                 case .cancelled:
@@ -182,6 +196,37 @@ struct RSVPView: View {
             .onDisappear {
                 paymentService.resetCheckoutState()
             }
+        }
+    }
+
+    private var successOverlay: some View {
+        ZStack {
+            Color.appBackground
+                .ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .fill(Color.appAccentOrange.opacity(0.15))
+                        .frame(width: 96, height: 96)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 44, weight: .black))
+                        .foregroundColor(.appAccentOrange)
+                }
+
+                VStack(spacing: 6) {
+                    Text("YOU'RE IN")
+                        .font(.system(size: 26, weight: .black))
+                        .tracking(2)
+                        .foregroundColor(.white)
+
+                    Text("\(shortDate) — \(session.location)")
+                        .font(.subheadline)
+                        .foregroundColor(.appTextSecondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(.horizontal, 32)
         }
     }
 

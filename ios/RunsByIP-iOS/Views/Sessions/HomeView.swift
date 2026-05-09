@@ -108,16 +108,14 @@ struct HomeView: View {
                 }
             }
             .sheet(isPresented: $showRSVP, onDismiss: {
-                sessionService.subscribeToCurrentSession()
+                // Webhook may have inserted the RSVP while the sheet was up.
+                // Refetch unconditionally so the count reflects the latest
+                // state even if the realtime insert was missed.
+                Task { await loadData() }
             }) {
                 if let session = sessionForRSVP {
                     RSVPView(session: session)
                         .transaction { $0.animation = nil }
-                }
-            }
-            .onChange(of: showRSVP) { _, isPresented in
-                if isPresented {
-                    sessionService.unsubscribe()
                 }
             }
             .navigationDestination(isPresented: $showAllRuns) {
