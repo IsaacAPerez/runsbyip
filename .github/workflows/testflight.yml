@@ -56,6 +56,7 @@ jobs:
         run: xcodebuild -resolvePackageDependencies -project RunsByIP.xcodeproj -scheme RunsByIP
 
       - name: Build and Upload to TestFlight
+        id: fastlane_beta
         env:
           LANG: en_US.UTF-8
           LC_ALL: en_US.UTF-8
@@ -72,6 +73,15 @@ jobs:
           # ASC_KEY_PATH is set by the 'Materialize ASC API key' step above
           # (via $GITHUB_ENV), pointing at $RUNNER_TEMP. No GH Secret needed.
         run: bundle exec fastlane beta
+
+      - name: Notify on pre-fastlane failure
+        # Fires only when an earlier step (1P key materialize, bundle install,
+        # SPM resolve, etc.) failed and fastlane never got to run its own
+        # error hook. Without this, those failures are silent — no iMessage.
+        if: failure() && steps.fastlane_beta.outcome == ''
+        env:
+          BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
+        run: scripts/notify_ci.sh ci failure "Workflow step failed before fastlane started — check the GH Actions run for which step (commonly: 1Password materialize, SPM resolve)"
 
       - name: Commit bumped marketing version
         if: success() && env.MARKETING_BUMPED != ''
