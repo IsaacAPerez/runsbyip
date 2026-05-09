@@ -17,6 +17,8 @@ final class ChatService: ObservableObject {
     private var typingChannel: RealtimeChannelV2?
     private var typingExpiryTask: Task<Void, Never>?
     private var typingExpirations: [String: Date] = [:]
+    private var lastTypingEmittedState: Bool?
+    private var lastTypingEmittedAt: Date?
     private var reactionRecords: [MessageReactionRecord] = []
     /// Populated from `messages_with_profiles`; realtime inserts only include `messages` columns (no avatar).
     private var avatarURLByUserId: [String: String] = [:]
@@ -40,6 +42,35 @@ final class ChatService: ObservableObject {
             try await fetchReactions()
         } catch {
             throw AppError.networkError(error.localizedDescription)
+        }
+    }
+
+    /// Reconciles local state with the server after a possible realtime gap
+    /// (e.g., the app was backgrounded or the channel briefly dropped).
+    /// Fetches any messages newer than the last one we've seen and merges
+    /// without disturbing existing rows. Reactions are re-pulled wholesale
+    /// since they're cheap and INSERT/DELETE deltas are easy to miss.
+    func refetchSinceLastSeen() async {
+        do {
+            let cutoff = messages.last?.createdAt
+            let query = supabase.from("messages_with_profiles").select()
+            let filtered = cutoff.map { query.gt("created_at", value: $0) } ?? query
+            let newer: [ChatMessage] = try await filtered
+                .order("created_at", ascending: true)
+                .execute()
+                .value
+
+            var seenIds = Set(messages.map(\.id))
+            for msg in newer where !seenIds.contains(msg.id) {
+                messages.append(msg)
+                seenIds.insert(msg.id)
+            }
+            rebuildAvatarCache(from: messages)
+
+            try await fetchReactions()
+        } catch {
+            // Silent: foreground reconciliation is best-effort. Realtime
+            // will continue to deliver new messages on the next insert.
         }
     }
 
@@ -177,6 +208,20 @@ final class ChatService: ObservableObject {
     }
 
     func setTyping(isTyping: Bool) {
+        // Throttle: receiver's typing window is 4s, so re-emitting "typing"
+        // every ~2s is enough to keep the indicator alive without flooding
+        // the channel on every keystroke. Always emit immediately when the
+        // state flips so transitions (idle→typing, typing→idle) feel instant.
+        let now = Date()
+        let stateChanged = lastTypingEmittedState != isTyping
+        if !stateChanged,
+           let last = lastTypingEmittedAt,
+           now.timeIntervalSince(last) < 2.0 {
+            return
+        }
+        lastTypingEmittedState = isTyping
+        lastTypingEmittedAt = now
+
         Task {
             guard let user = try? await currentUser() else { return }
             let displayName = user.userMetadata["display_name"]?.stringValue ?? "Anonymous"
@@ -333,12 +378,18 @@ final class ChatService: ObservableObject {
                 // Append the raw row immediately so the bubble appears without delay.
                 self.messages.append(raw)
 
-                // Then re-fetch through `messages_with_profiles` to pick up
-                // the sender's current avatar_url + display_name — realtime
-                // only ships `messages` columns, and avatar_url lives on the
-                // profiles table.
-                Task { [weak self] in
-                    await self?.hydrateMessageFromView(id: raw.id)
+                // Realtime INSERT events don't include avatar_url (it's on the
+                // profiles table). Only re-fetch through messages_with_profiles
+                // when we don't already have this user's avatar cached —
+                // otherwise effectiveAvatarURL falls back to the cache and the
+                // single-row hydrate query is wasted work. Saves an N×N query
+                // storm during chat bursts at game-night scale.
+                let cached = (avatarURLByUserId[raw.userId.lowercased()] ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if cached.isEmpty {
+                    Task { [weak self] in
+                        await self?.hydrateMessageFromView(id: raw.id)
+                    }
                 }
             }
         }

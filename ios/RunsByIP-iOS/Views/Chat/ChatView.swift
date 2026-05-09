@@ -5,6 +5,7 @@ struct ChatView: View {
     @EnvironmentObject var chatService: ChatService
     @EnvironmentObject var authService: AuthService
     @StateObject private var chatWriteGate = ChatWriteGate()
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var messageText = ""
     @State private var isLoading = true
@@ -244,6 +245,13 @@ struct ChatView: View {
             }
             .task {
                 await loadChat()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                // Realtime postgres changes don't replay missed events, so
+                // anything sent while we were backgrounded never reaches the
+                // local channel. Reconcile from the server on foreground.
+                guard newPhase == .active, !isLoading else { return }
+                Task { await chatService.refetchSinceLastSeen() }
             }
             .onDisappear {
                 typingResetTask?.cancel()
