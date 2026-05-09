@@ -78,10 +78,11 @@ jobs:
         # Fires only when an earlier step (1P key materialize, bundle install,
         # SPM resolve, etc.) failed and fastlane never got to run its own
         # error hook. Without this, those failures are silent — no iMessage.
-        if: failure() && steps.fastlane_beta.outcome == ''
+        if: failure() && steps.fastlane_beta.outcome == 'skipped'
         env:
           BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
-        run: scripts/notify_ci.sh ci failure "Workflow step failed before fastlane started — check the GH Actions run for which step (commonly: 1Password materialize, SPM resolve)"
+        run: |
+          scripts/notify_ci.sh ci failure "Workflow step failed before fastlane started — check the GH Actions run (likely 1Password materialize or SPM resolve)"
 
       - name: Commit bumped marketing version
         if: success() && env.MARKETING_BUMPED != ''
