@@ -88,34 +88,23 @@ final class PaymentService: ObservableObject {
         return request
     }
 
+    @discardableResult
     func confirmApplePayPayment(
         clientSecret: String,
         payment: PKPayment,
         authenticationContext: STPAuthenticationContext
-    ) async {
+    ) async -> PaymentResult {
         paymentResult = nil
         isProcessing = true
 
-        let paymentMethodParams = STPPaymentMethodParams(card: STPPaymentMethodCardParams(), billingDetails: nil, metadata: nil)
-
-        // Create payment method from Apple Pay token
-        let applePayParams = STPPaymentMethodCardParams()
-        let intentParams = STPPaymentIntentParams(clientSecret: clientSecret)
-        intentParams.paymentMethodParams = STPPaymentMethodParams(card: applePayParams, billingDetails: nil, metadata: nil)
-
-        // Use the Stripe Apple Pay token approach
-        STPAPIClient.shared.createPaymentMethod(with: payment) { [weak self] paymentMethod, error in
-            guard let self else { return }
-            Task { @MainActor in
+        let result: PaymentResult = await withCheckedContinuation { continuation in
+            STPAPIClient.shared.createPaymentMethod(with: payment) { paymentMethod, error in
                 if let error {
-                    self.paymentResult = .failed(error.localizedDescription)
-                    self.isProcessing = false
+                    continuation.resume(returning: .failed(error.localizedDescription))
                     return
                 }
-
                 guard let paymentMethod else {
-                    self.paymentResult = .failed("Failed to create payment method from Apple Pay.")
-                    self.isProcessing = false
+                    continuation.resume(returning: .failed("Failed to create payment method from Apple Pay."))
                     return
                 }
 
@@ -123,26 +112,23 @@ final class PaymentService: ObservableObject {
                 intentParams.paymentMethodId = paymentMethod.stripeId
                 intentParams.returnURL = "runsbyip://stripe-redirect"
 
-                let result = await withCheckedContinuation { continuation in
-                    STPPaymentHandler.shared().confirmPayment(intentParams, with: authenticationContext) { status, _, error in
-                        let result: PaymentResult
-                        switch status {
-                        case .succeeded:
-                            result = .success
-                        case .canceled:
-                            result = .cancelled
-                        case .failed:
-                            result = .failed(error?.localizedDescription ?? "Payment failed. Please try again.")
-                        @unknown default:
-                            result = .failed("Payment status was unavailable. Please try again.")
-                        }
-                        continuation.resume(returning: result)
+                STPPaymentHandler.shared().confirmPayment(intentParams, with: authenticationContext) { status, _, err in
+                    switch status {
+                    case .succeeded:
+                        continuation.resume(returning: .success)
+                    case .canceled:
+                        continuation.resume(returning: .cancelled)
+                    case .failed:
+                        continuation.resume(returning: .failed(err?.localizedDescription ?? "Payment failed. Please try again."))
+                    @unknown default:
+                        continuation.resume(returning: .failed("Payment status was unavailable. Please try again."))
                     }
                 }
-
-                self.paymentResult = result
-                self.isProcessing = false
             }
         }
+
+        paymentResult = result
+        isProcessing = false
+        return result
     }
 }

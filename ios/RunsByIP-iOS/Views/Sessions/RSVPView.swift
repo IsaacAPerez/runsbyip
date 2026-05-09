@@ -444,13 +444,26 @@ struct RSVPView: View {
                     return
                 }
 
-                let delegate = ApplePayDelegate { payment in
+                let delegate = ApplePayDelegate { payment, applePayCompletion in
                     Task {
-                        await paymentService.confirmApplePayPayment(
+                        let result = await paymentService.confirmApplePayPayment(
                             clientSecret: clientSecret,
                             payment: payment,
                             authenticationContext: authContext
                         )
+                        switch result {
+                        case .success:
+                            applePayCompletion(PKPaymentAuthorizationResult(status: .success, errors: nil))
+                        case .failed(let message):
+                            let nsError = NSError(
+                                domain: PKPaymentErrorDomain,
+                                code: PKPaymentError.unknownError.rawValue,
+                                userInfo: [NSLocalizedDescriptionKey: message]
+                            )
+                            applePayCompletion(PKPaymentAuthorizationResult(status: .failure, errors: [nsError]))
+                        case .cancelled:
+                            applePayCompletion(PKPaymentAuthorizationResult(status: .failure, errors: nil))
+                        }
                     }
                 }
 
@@ -842,9 +855,9 @@ private extension UIViewController {
 }
 
 private class ApplePayDelegate: NSObject, PKPaymentAuthorizationViewControllerDelegate {
-    private let onPayment: (PKPayment) -> Void
+    private let onPayment: (PKPayment, @escaping (PKPaymentAuthorizationResult) -> Void) -> Void
 
-    init(onPayment: @escaping (PKPayment) -> Void) {
+    init(onPayment: @escaping (PKPayment, @escaping (PKPaymentAuthorizationResult) -> Void) -> Void) {
         self.onPayment = onPayment
     }
 
@@ -853,8 +866,7 @@ private class ApplePayDelegate: NSObject, PKPaymentAuthorizationViewControllerDe
         didAuthorizePayment payment: PKPayment,
         handler completion: @escaping (PKPaymentAuthorizationResult) -> Void
     ) {
-        onPayment(payment)
-        completion(PKPaymentAuthorizationResult(status: .success, errors: nil))
+        onPayment(payment, completion)
     }
 
     func paymentAuthorizationViewControllerDidFinish(_ controller: PKPaymentAuthorizationViewController) {
