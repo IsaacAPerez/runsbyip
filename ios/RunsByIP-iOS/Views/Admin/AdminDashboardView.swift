@@ -308,9 +308,21 @@ struct AdminDashboardView: View {
         do {
             try await sessionService.fetchAllSessions(forAdmin: true)
             try await sessionService.fetchCurrentSession()
-            for session in sessionService.sessions {
-                rsvpCounts[session.id] = try await sessionService.fetchRSVPCount(for: session.id)
+            // Fan out RSVP counts in parallel — sequential awaits made the
+            // dashboard cold-start scale linearly with session count.
+            let sessions = sessionService.sessions
+            let counts = await withTaskGroup(of: (String, Int).self) { group in
+                for session in sessions {
+                    group.addTask { [sessionService] in
+                        let count = (try? await sessionService.fetchRSVPCount(for: session.id)) ?? 0
+                        return (session.id, count)
+                    }
+                }
+                var result: [String: Int] = [:]
+                for await (id, count) in group { result[id] = count }
+                return result
             }
+            rsvpCounts = counts
         } catch {
             // Dashboard degrades gracefully
         }
@@ -413,26 +425,19 @@ struct AdminDashboardView: View {
         let message = pushMessage
         Task {
             do {
-                let url = URL(string: "https://ncjgkthruvapcogqaxhi.supabase.co/functions/v1/send-push")!
-                var request = URLRequest(url: url)
-                request.httpMethod = "POST"
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-                let payload: [String: String] = [
-                    "type": "custom",
-                    "title": "RunsByIP",
-                    "body": message
-                ]
-                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-
-                let (_, response) = try await URLSession.shared.data(for: request)
-
-                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                    showToast("Push sent!")
-                    pushMessage = ""
-                } else {
-                    showToast("Push failed")
-                }
+                // functions.invoke auto-attaches the caller's Supabase JWT, so
+                // once verify_jwt is enabled on send-push the admin's session
+                // already authorizes the request.
+                try await SupabaseService.shared.client.functions.invoke(
+                    "send-push",
+                    options: .init(body: [
+                        "type": "custom",
+                        "title": "RunsByIP",
+                        "body": message
+                    ])
+                )
+                showToast("Push sent!")
+                pushMessage = ""
             } catch {
                 showToast("Push failed: \(error.localizedDescription)")
             }

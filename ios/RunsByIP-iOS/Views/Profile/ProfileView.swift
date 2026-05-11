@@ -5,6 +5,7 @@ import UIKit
 struct ProfileView: View {
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var notificationService: NotificationService
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var isEditing = false
     @State private var editName = ""
@@ -192,6 +193,13 @@ struct ProfileView: View {
             }
             .task {
                 notificationsEnabled = await notificationService.authorizationGranted()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                // Re-check after returning from Settings — the 1s post-Settings
+                // sleep above is almost always shorter than the user takes, so
+                // without this the toggle UI lies until the next view appearance.
+                guard newPhase == .active else { return }
+                Task { notificationsEnabled = await notificationService.authorizationGranted() }
             }
         }
     }

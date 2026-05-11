@@ -132,7 +132,7 @@ struct MainTabView: View {
     @EnvironmentObject var authService: AuthService
 
     private var isAdmin: Bool {
-        authService.currentProfile?.email == "iperez2435@gmail.com"
+        authService.isAdmin
     }
 
     var body: some View {

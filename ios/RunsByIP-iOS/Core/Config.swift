@@ -16,7 +16,7 @@ struct StripeConfig {
 }
 
 struct AppConfig {
-    static let environment: AppEnvironment = .dev
+    static let environment: AppEnvironment = .prod
 }
 
 // MARK: - Chat write gate (send, typing indicator, reactions)

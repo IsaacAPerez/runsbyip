@@ -1,5 +1,6 @@
 import UIKit
 import UserNotifications
+import OSLog
 
 @MainActor
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
@@ -28,7 +29,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        print("Failed to register for remote notifications: \(error.localizedDescription)")
+        Logger(subsystem: "com.isaacperez.runsbyip", category: "push").error("Failed to register for remote notifications: \(error.localizedDescription, privacy: .public)")
     }
 
     // MARK: - UNUserNotificationCenterDelegate

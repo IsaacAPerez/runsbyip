@@ -256,7 +256,7 @@ struct ChatView: View {
             .onDisappear {
                 typingResetTask?.cancel()
                 chatService.setTyping(isTyping: false)
-                chatService.unsubscribe()
+                Task { await chatService.unsubscribe() }
             }
             .onChange(of: selectedPhotoItem) { _, newValue in
                 Task {
@@ -284,15 +284,17 @@ struct ChatView: View {
     }
 
     private func loadChat() async {
-        // Kick off everything that doesn't depend on each other in parallel:
-        // auth lookups, channel subscribes, and the messages+reactions fetch.
-        // Previously this was 5+ serial round trips (~5-10s on slow LTE);
-        // now they overlap. The insert handler dedupes by id against the
-        // fetched array, and refetchSinceLastSeen on foreground catches any
-        // narrow gap if a message lands between fetch and subscribe.
+        // Render as soon as the fetch + auth lookups resolve. Realtime
+        // subscribes run detached: the Supabase tenant cold-starts (replication
+        // slot, publication validation, WAL stream) on first connect after
+        // inactivity, which can take seconds or hang outright. Gating the
+        // spinner on that produced infinite "Loading chat..." in the sim.
+        // The insert handler dedupes by id, so any messages that land while
+        // subscribes are still warming up are caught by refetchSinceLastSeen
+        // on the next foregrounding.
         async let userIdTask = chatService.currentUserId
         async let muteTask = chatService.checkMuteStatus()
-        async let subscribeTask: () = chatService.subscribeToMessages()
+        Task { await chatService.subscribeToMessages() }
 
         do {
             try await chatService.fetchMessages()
@@ -301,8 +303,7 @@ struct ChatView: View {
         }
 
         currentUserId = await userIdTask
-        isMuted = await muteTask
-        _ = await subscribeTask
+        if let muted = await muteTask { isMuted = muted }
         isLoading = false
     }
 

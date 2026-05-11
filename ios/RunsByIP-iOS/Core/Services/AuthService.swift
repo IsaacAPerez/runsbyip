@@ -16,6 +16,13 @@ final class AuthService: ObservableObject {
     private var supabase: SupabaseClient { SupabaseService.shared.client }
     private var currentNonce: String?
 
+    /// Holds the in-flight Apple sign-in controller + delegate + presentation
+    /// provider for the duration of one attempt. ASAuthorizationController
+    /// retains its delegate only weakly, so without a strong reference here
+    /// the delegate (and the awaiting continuation) can be deallocated
+    /// mid-flow, leaving the sign-in Task hanging forever.
+    private var appleSignInRetention: (ASAuthorizationController, AppleSignInDelegate, AppleSignInPresentationProvider)?
+
     init() {
         authStateTask = Task { [weak self] in
             guard let self else { return }
@@ -70,14 +77,18 @@ final class AuthService: ObservableObject {
     }
 
     private func performAppleSignIn(request: ASAuthorizationAppleIDRequest) async throws -> ASAuthorization {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { [weak self] continuation in
             let delegate = AppleSignInDelegate(continuation: continuation)
             let presentationProvider = AppleSignInPresentationProvider()
             let controller = ASAuthorizationController(authorizationRequests: [request])
             controller.delegate = delegate
             controller.presentationContextProvider = presentationProvider
-            objc_setAssociatedObject(controller, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
-            objc_setAssociatedObject(controller, "presentationProvider", presentationProvider, .OBJC_ASSOCIATION_RETAIN)
+            delegate.onFinish = { [weak self] in
+                Task { @MainActor [weak self] in
+                    self?.appleSignInRetention = nil
+                }
+            }
+            self?.appleSignInRetention = (controller, delegate, presentationProvider)
             controller.performRequests()
         }
     }
@@ -246,6 +257,7 @@ private class AppleSignInPresentationProvider: NSObject, ASAuthorizationControll
 
 private class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate {
     private let continuation: CheckedContinuation<ASAuthorization, Error>
+    var onFinish: (() -> Void)?
 
     init(continuation: CheckedContinuation<ASAuthorization, Error>) {
         self.continuation = continuation
@@ -253,9 +265,12 @@ private class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate {
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         continuation.resume(returning: authorization)
+        onFinish?()
     }
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
         continuation.resume(throwing: error)
+        onFinish?()
     }
 }
+

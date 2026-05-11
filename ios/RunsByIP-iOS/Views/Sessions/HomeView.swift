@@ -10,7 +10,6 @@ struct HomeView: View {
     @State private var isLoading = true
     @State private var hasLoadedOnce = false
     @State private var errorMessage: String?
-    @State private var showRSVP = false
     @State private var showAllRuns = false
     @State private var leaderboard: [LeaderboardEntry] = []
     @State private var galleryURLs: [URL] = []
@@ -71,7 +70,6 @@ struct HomeView: View {
                                 onRSVP: {
                                     guard !session.isFull(using: confirmedCount) else { return }
                                     sessionForRSVP = session
-                                    showRSVP = true
                                 }
                             )
                         } else if isLoading && !hasLoadedOnce {
@@ -107,30 +105,31 @@ struct HomeView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showRSVP, onDismiss: {
+            .sheet(item: $sessionForRSVP, onDismiss: {
                 // Webhook may have inserted the RSVP while the sheet was up.
                 // Refetch unconditionally so the count reflects the latest
                 // state even if the realtime insert was missed.
                 Task { await loadData() }
-            }) {
-                if let session = sessionForRSVP {
-                    RSVPView(session: session)
-                        .transaction { $0.animation = nil }
-                }
+            }) { session in
+                // sheet(item:) ties presentation to the session itself, so
+                // SwiftUI doesn't snapshot a stale `sessionForRSVP` the way
+                // sheet(isPresented:) + a sibling @State did — that earlier
+                // pairing produced a blank sheet on first tap.
+                RSVPView(session: session)
             }
             .navigationDestination(isPresented: $showAllRuns) {
                 SessionsListView()
             }
             .task {
                 await loadData()
-                sessionService.subscribeToCurrentSession()
+                await sessionService.subscribeToCurrentSession()
             }
             .refreshable {
                 await loadData()
-                sessionService.subscribeToCurrentSession()
+                await sessionService.subscribeToCurrentSession()
             }
             .onDisappear {
-                sessionService.unsubscribe()
+                Task { await sessionService.unsubscribe() }
             }
         }
     }

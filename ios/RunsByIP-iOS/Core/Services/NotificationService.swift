@@ -1,5 +1,6 @@
 import Foundation
 import UserNotifications
+import OSLog
 @preconcurrency import Supabase
 
 @MainActor
@@ -61,7 +62,7 @@ final class NotificationService: ObservableObject {
                 ))
                 .execute()
         } catch {
-            print("Failed to save device token: \(error.localizedDescription)")
+            Logger(subsystem: "com.isaacperez.runsbyip", category: "push").error("Failed to save device token: \(error.localizedDescription, privacy: .public)")
         }
     }
 }

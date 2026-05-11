@@ -248,20 +248,21 @@ final class ChatService: ObservableObject {
         }
     }
 
-    func unsubscribe() {
+    func unsubscribe() async {
+        // Await teardown so a quick navigate-away + return doesn't race a new
+        // subscribe against the previous channel still being torn down. That
+        // race leaked channels and could double-deliver inserts/reactions.
         typingExpiryTask?.cancel()
         typingExpiryTask = nil
         typingUsers = []
         typingExpirations = [:]
 
-        Task {
-            await messageChannel?.unsubscribe()
-            await reactionChannel?.unsubscribe()
-            await typingChannel?.unsubscribe()
-            messageChannel = nil
-            reactionChannel = nil
-            typingChannel = nil
-        }
+        await messageChannel?.unsubscribe()
+        await reactionChannel?.unsubscribe()
+        await typingChannel?.unsubscribe()
+        messageChannel = nil
+        reactionChannel = nil
+        typingChannel = nil
     }
 
     // MARK: - Mute
@@ -274,8 +275,12 @@ final class ChatService: ObservableObject {
             .execute()
     }
 
-    func checkMuteStatus() async -> Bool {
-        guard let uid = await currentUserId else { return false }
+    /// Returns the user's mute state, or `nil` on error so callers can
+    /// preserve the last-known value rather than flipping a muted user to
+    /// un-muted on a transient fetch failure. (The DB/RLS still blocks the
+    /// send either way, but the UX shouldn't lie.)
+    func checkMuteStatus() async -> Bool? {
+        guard let uid = await currentUserId else { return nil }
         do {
             let profile: UserProfile = try await supabase
                 .from("profiles")
@@ -286,7 +291,7 @@ final class ChatService: ObservableObject {
                 .value
             return profile.isMuted
         } catch {
-            return false
+            return nil
         }
     }
 

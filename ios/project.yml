@@ -67,7 +67,7 @@ targets:
     entitlements:
       path: RunsByIP-iOS/RunsByIP.entitlements
       properties:
-        aps-environment: development
+        aps-environment: production
         com.apple.developer.applesignin:
           - Default
         com.apple.developer.associated-domains:

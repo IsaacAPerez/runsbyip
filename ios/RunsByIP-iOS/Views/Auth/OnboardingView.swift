@@ -321,15 +321,8 @@ struct OnboardingView: View {
                 .buttonStyle(.plain)
                 .disabled(isSaving || displayName.trimmingCharacters(in: .whitespaces).isEmpty)
                 .opacity(displayName.trimmingCharacters(in: .whitespaces).isEmpty ? 0.4 : 1)
-
-                Button {
-                    withAnimation { currentPage = 4 }
-                } label: {
-                    Text("Skip")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.appTextSecondary)
-                }
-                .buttonStyle(.plain)
+                // Skip removed — display name is required so leaderboard counts
+                // and chat attribution don't collapse multiple users into "Player".
             }
             .padding(.horizontal, AppSpacing.space24)
             .padding(.bottom, 40)

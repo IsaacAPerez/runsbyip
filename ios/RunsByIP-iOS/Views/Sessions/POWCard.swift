@@ -2,6 +2,7 @@ import SwiftUI
 
 struct POWCard: View {
     @EnvironmentObject var powService: POWService
+    @EnvironmentObject var authService: AuthService
 
     @State private var isLoading = true
 
@@ -102,20 +103,26 @@ struct POWCard: View {
 
     // MARK: - Vote (stored locally + server)
 
-    private func vote(for playerName: String, pollId: String) {
+    private func vote(for candidateName: String, pollId: String) {
         guard powService.userVotedFor == nil else { return }
+        // Voter identity must come from the signed-in profile, not the
+        // candidate they're voting for. Without an authenticated profile we
+        // can't attribute the vote, so skip the server write entirely rather
+        // than send a malformed row that misreports the voter.
+        guard let voter = authService.currentProfile,
+              let voterName = voter.displayName, !voterName.isEmpty,
+              let voterEmail = voter.email, !voterEmail.isEmpty
+        else { return }
 
-        // Store locally immediately
-        powService.userVotedFor = playerName
-        UserDefaults.standard.set(playerName, forKey: "pow_voted_for_\(pollId)")
+        powService.userVotedFor = candidateName
+        UserDefaults.standard.set(candidateName, forKey: "pow_voted_for_\(pollId)")
 
-        // Also persist to server (fire and forget)
         Task {
             try? await powService.castVote(
                 pollId: pollId,
-                voterName: playerName,
-                voterEmail: "local-vote@runsbyip.app",
-                votedForName: playerName
+                voterName: voterName,
+                voterEmail: voterEmail,
+                votedForName: candidateName
             )
         }
     }

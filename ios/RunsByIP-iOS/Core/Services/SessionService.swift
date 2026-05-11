@@ -179,9 +179,14 @@ final class SessionService: ObservableObject {
 
     func fetchLeaderboard() async throws -> [LeaderboardEntry] {
         do {
+            // Cap to the most recent 2000 RSVPs so the leaderboard query stays
+            // bounded as the table grows. At ~15 attendees/session that's
+            // roughly 130 sessions of history, enough for "most consistent."
             let rsvps: [RSVP] = try await supabase
                 .from("rsvps")
                 .select()
+                .order("created_at", ascending: false)
+                .limit(2000)
                 .execute()
                 .value
 
@@ -225,8 +230,8 @@ final class SessionService: ObservableObject {
 
     // MARK: - Real-time Subscriptions
 
-    func subscribeToCurrentSession() {
-        unsubscribe()
+    func subscribeToCurrentSession() async {
+        await unsubscribe()
         guard let sessionId = currentSession?.id else { return }
 
         sessionChannel = supabase.realtimeV2.channel("session-changes")
@@ -271,33 +276,33 @@ final class SessionService: ObservableObject {
         Task { try? await rsvpChannel.subscribeWithError() }
     }
 
-    func unsubscribe() {
-        Task {
-            await sessionChannel?.unsubscribe()
-            await rsvpChannel?.unsubscribe()
-            sessionChannel = nil
-            rsvpChannel = nil
-        }
+    func unsubscribe() async {
+        // Await teardown so a fast subscribe/unsubscribe cycle (e.g. tab churn)
+        // can't race a new subscribe against the previous channel still being
+        // torn down, which would leak the old channel and double-fire handlers.
+        await sessionChannel?.unsubscribe()
+        await rsvpChannel?.unsubscribe()
+        sessionChannel = nil
+        rsvpChannel = nil
     }
 
     // MARK: - Push Notifications
 
     func sendPush(type: String, sessionId: String? = nil, title: String? = nil, body: String? = nil) async {
-        do {
-            var payload: [String: String] = ["type": type]
-            if let sessionId { payload["session_id"] = sessionId }
-            if let title { payload["title"] = title }
-            if let body { payload["body"] = body }
+        // Use functions.invoke so the caller's Supabase JWT is attached
+        // automatically. The `send-push` edge function currently has
+        // verify_jwt=false (anyone with the URL can spam pushes); once
+        // verify_jwt is flipped on and a role check is added server-side,
+        // this client already sends what the server will need.
+        var payload: [String: String] = ["type": type]
+        if let sessionId { payload["session_id"] = sessionId }
+        if let title { payload["title"] = title }
+        if let body { payload["body"] = body }
 
-            let url = URL(string: "https://ncjgkthruvapcogqaxhi.supabase.co/functions/v1/send-push")!
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-            _ = try await URLSession.shared.data(for: request)
-        } catch {
-            // Push failures are non-critical — don't block the caller
-        }
+        try? await supabase.functions.invoke(
+            "send-push",
+            options: .init(body: payload)
+        )
     }
 
     // MARK: - Create Session
