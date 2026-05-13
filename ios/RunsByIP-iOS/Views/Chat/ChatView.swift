@@ -20,6 +20,9 @@ struct ChatView: View {
     @State private var selectedPhotoData: Data?
     @State private var typingResetTask: Task<Void, Never>?
     @State private var showMembers = false
+    @State private var isPinnedToBottom: Bool = true
+    @State private var isLoadingOlder: Bool = false
+    @State private var didInitialScroll: Bool = false
 
     private var isMuted: Bool { chatService.currentUserMuted }
 
@@ -62,7 +65,28 @@ struct ChatView: View {
                         ScrollViewReader { proxy in
                             ScrollView {
                                 LazyVStack(spacing: 16) {
-                                    ForEach(chatService.messages) { message in
+                                    if chatService.hasMoreOlderMessages {
+                                        // Top sentinel — when it scrolls into
+                                        // view, page in the next older batch.
+                                        HStack {
+                                            Spacer()
+                                            if isLoadingOlder {
+                                                ProgressView().tint(.appTextSecondary)
+                                            } else {
+                                                Text("Loading older…")
+                                                    .font(.caption)
+                                                    .foregroundColor(.appTextSecondary)
+                                            }
+                                            Spacer()
+                                        }
+                                        .padding(.vertical, 8)
+                                        .onAppear {
+                                            loadOlderMessages(proxy: proxy)
+                                        }
+                                    }
+
+                                    ForEach(Array(chatService.messages.enumerated()), id: \.element.id) { index, message in
+                                        let isLast = index == chatService.messages.count - 1
                                         MessageBubbleView(
                                             message: message,
                                             isCurrentUser: message.userId == currentUserId,
@@ -85,21 +109,48 @@ struct ChatView: View {
                                             reactionsAllowed: canUseChatWrites
                                         )
                                         .id(message.id)
+                                        .onAppear {
+                                            if isLast { isPinnedToBottom = true }
+                                        }
+                                        .onDisappear {
+                                            if isLast { isPinnedToBottom = false }
+                                        }
                                     }
                                 }
                                 .padding(.vertical, 14)
                             }
                             .scrollDismissesKeyboard(.interactively)
-                            .onChange(of: chatService.messages.count) { _, _ in
-                                scrollToBottom(proxy: proxy)
+                            .onChange(of: chatService.messages.count) { _, newCount in
+                                // First time messages populate, stagger a few
+                                // scrolls — LazyVStack hasn't laid out the
+                                // bottom cells yet on the first pass, and
+                                // photo bubbles can shift things further as
+                                // their AsyncImage placeholder swaps in.
+                                if !didInitialScroll, newCount > 0 {
+                                    didInitialScroll = true
+                                    settleInitialScroll(proxy: proxy)
+                                    return
+                                }
+                                // Only yank the user to the bottom on new
+                                // messages if they were already pinned there.
+                                // Otherwise scrolling up to read history gets
+                                // hijacked on every realtime insert.
+                                if isPinnedToBottom {
+                                    scrollToBottom(proxy: proxy)
+                                }
                             }
                             .onAppear {
-                                scrollToBottom(proxy: proxy, animated: false)
+                                if !didInitialScroll, !chatService.messages.isEmpty {
+                                    didInitialScroll = true
+                                    settleInitialScroll(proxy: proxy)
+                                }
                             }
                             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
                                 // Pin to the latest message when the keyboard
                                 // comes up so the composer never covers it.
-                                scrollToBottom(proxy: proxy)
+                                if isPinnedToBottom {
+                                    scrollToBottom(proxy: proxy)
+                                }
                             }
                         }
                     }
@@ -330,6 +381,42 @@ struct ChatView: View {
         currentUserId = await userIdTask
         _ = await muteTask  // checkMuteStatus() publishes to chatService.currentUserMuted
         isLoading = false
+    }
+
+    private func settleInitialScroll(proxy: ScrollViewProxy) {
+        // Fire multiple non-animated scrolls so we catch the moment the
+        // LazyVStack finishes laying out the bottom cells and the photo
+        // bubbles have rendered through their AsyncImage placeholder. A
+        // single .onAppear scroll fires before the last cell exists and
+        // strands the user near the top.
+        if let lastId = chatService.messages.last?.id {
+            proxy.scrollTo(lastId, anchor: .bottom)
+        }
+        for delayMS in [50, 200, 500, 900] {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(delayMS))
+                if let lastId = chatService.messages.last?.id {
+                    proxy.scrollTo(lastId, anchor: .bottom)
+                }
+            }
+        }
+    }
+
+    private func loadOlderMessages(proxy: ScrollViewProxy) {
+        guard !isLoadingOlder, chatService.hasMoreOlderMessages else { return }
+        let anchorId = chatService.messages.first?.id
+        isLoadingOlder = true
+        Task {
+            let added = await chatService.loadOlderMessages()
+            isLoadingOlder = false
+            // Pin the viewport to the previously-topmost message so the
+            // newly prepended rows don't visually shove the user down.
+            if added > 0, let anchorId {
+                await MainActor.run {
+                    proxy.scrollTo(anchorId, anchor: .top)
+                }
+            }
+        }
     }
 
     private func toggleGlobalChatLock() {

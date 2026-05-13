@@ -8,6 +8,10 @@ final class ChatService: ObservableObject {
     @Published var reactionsByMessage: [String: [MessageReaction]] = [:]
     @Published var typingUsers: [ChatTypingUser] = []
     @Published private(set) var currentUserMuted: Bool = false
+    @Published private(set) var hasMoreOlderMessages: Bool = false
+
+    static let pageSize: Int = 50
+    private var isLoadingOlder: Bool = false
 
     private let chatBucket = "chat-media"
     private let jsonDecoder = JSONDecoder()
@@ -33,28 +37,63 @@ final class ChatService: ObservableObject {
 
     func fetchMessages() async throws {
         do {
-            // Messages and reactions are independent queries — fetch them in
-            // parallel so the round trips overlap. Cuts initial chat load by
-            // one network hop.
-            async let messagesTask: [ChatMessage] = supabase
+            // Load the most recent page only. Older rows are paged in on
+            // demand by loadOlderMessages() when the user scrolls to the top.
+            // Without this cap the cold-start query scaled linearly with
+            // the room's lifetime history.
+            let latest: [ChatMessage] = try await supabase
                 .from("messages_with_profiles")
                 .select()
-                .order("created_at", ascending: true)
-                .execute()
-                .value
-            async let reactionsTask: [MessageReactionRecord] = supabase
-                .from("message_reactions")
-                .select()
-                .order("created_at", ascending: true)
+                .order("created_at", ascending: false)
+                .limit(Self.pageSize)
                 .execute()
                 .value
 
-            messages = try await messagesTask
+            messages = latest.reversed()
+            hasMoreOlderMessages = latest.count == Self.pageSize
             rebuildAvatarCache(from: messages)
-            reactionRecords = try await reactionsTask
-            rebuildReactions()
+
+            // Fetch reactions only for the messages we have on screen.
+            // Older pages bring their own reactions when loaded.
+            try await fetchReactions(forMessageIds: messages.map(\.id))
         } catch {
             throw AppError.networkError(error.localizedDescription)
+        }
+    }
+
+    /// Pages in the next batch of older messages above the current head.
+    /// Returns the number of new rows prepended; 0 means we hit the top.
+    @discardableResult
+    func loadOlderMessages() async -> Int {
+        guard !isLoadingOlder, hasMoreOlderMessages else { return 0 }
+        guard let oldest = messages.first?.createdAt else { return 0 }
+
+        isLoadingOlder = true
+        defer { isLoadingOlder = false }
+
+        do {
+            let older: [ChatMessage] = try await supabase
+                .from("messages_with_profiles")
+                .select()
+                .lt("created_at", value: oldest)
+                .order("created_at", ascending: false)
+                .limit(Self.pageSize)
+                .execute()
+                .value
+
+            let prepend = older.reversed()
+            let existingIds = Set(messages.map(\.id))
+            let deduped = prepend.filter { !existingIds.contains($0.id) }
+            messages.insert(contentsOf: deduped, at: 0)
+            hasMoreOlderMessages = older.count == Self.pageSize
+            rebuildAvatarCache(from: messages)
+
+            if !deduped.isEmpty {
+                try? await fetchReactions(forMessageIds: deduped.map(\.id), merge: true)
+            }
+            return deduped.count
+        } catch {
+            return 0
         }
     }
 
@@ -80,7 +119,7 @@ final class ChatService: ObservableObject {
             }
             rebuildAvatarCache(from: messages)
 
-            try await fetchReactions()
+            try await fetchReactions(forMessageIds: messages.map(\.id))
         } catch {
             // Silent: foreground reconciliation is best-effort. Realtime
             // will continue to deliver new messages on the next insert.
@@ -208,9 +247,14 @@ final class ChatService: ObservableObject {
 
     func toggleReaction(messageId: String, emoji: String) async throws {
         let user = try await currentUser()
+        // Postgres canonicalizes UUIDs to lowercase; Swift's uuidString is
+        // uppercase. Mismatch made the local "does this reaction exist?"
+        // lookup miss, so a second tap re-INSERTed and the unique index
+        // (message_id, user_id, emoji) bounced it as a duplicate.
+        let userIdString = user.id.uuidString.lowercased()
 
         if let existing = reactionRecords.first(where: {
-            $0.messageId == messageId && $0.userId == user.id.uuidString && $0.emoji == emoji
+            $0.messageId == messageId && $0.userId == userIdString && $0.emoji == emoji
         }) {
             do {
                 try await supabase
@@ -239,7 +283,7 @@ final class ChatService: ObservableObject {
                     .from("message_reactions")
                     .insert(NewReaction(
                         messageId: messageId,
-                        userId: user.id.uuidString,
+                        userId: userIdString,
                         emoji: emoji
                     ))
                     .execute()
@@ -435,14 +479,27 @@ final class ChatService: ObservableObject {
         }
     }
 
-    private func fetchReactions() async throws {
-        reactionRecords = try await supabase
-            .from("message_reactions")
-            .select()
+    /// Loads reactions, optionally scoped to a set of message ids. When
+    /// `merge` is true the new rows are unioned with the existing ones
+    /// (used when paging in older messages); otherwise they replace.
+    private func fetchReactions(forMessageIds ids: [String]? = nil, merge: Bool = false) async throws {
+        var query = supabase.from("message_reactions").select()
+        if let ids, !ids.isEmpty {
+            query = query.in("message_id", values: ids)
+        }
+        let rows: [MessageReactionRecord] = try await query
             .order("created_at", ascending: true)
             .execute()
             .value
 
+        if merge {
+            let existingIds = Set(reactionRecords.map(\.id))
+            for row in rows where !existingIds.contains(row.id) {
+                reactionRecords.append(row)
+            }
+        } else {
+            reactionRecords = rows
+        }
         rebuildReactions()
     }
 
