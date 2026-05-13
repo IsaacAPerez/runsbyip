@@ -2,8 +2,13 @@ import SwiftUI
 
 struct SessionDetailView: View {
     @EnvironmentObject var sessionService: SessionService
+    @EnvironmentObject var appConfig: AppConfigService
 
     let session: GameSession
+
+    private var discountCents: Int { appConfig.iosDiscountCents }
+    private var effectivePrice: String { session.effectivePriceDisplay(iosDiscountCents: discountCents) }
+    private var hasDiscount: Bool { discountCents > 0 && session.effectivePriceCents(iosDiscountCents: discountCents) < session.priceCents }
 
     @State private var rsvps: [RSVP] = []
     @State private var isLoading = true
@@ -47,9 +52,26 @@ struct SessionDetailView: View {
                             .font(.subheadline)
                             .foregroundColor(.appTextSecondary)
 
-                            Text("\(session.priceDisplay) per player")
-                                .font(.subheadline.bold())
-                                .foregroundColor(.appAccentOrange)
+                            HStack(spacing: 8) {
+                                if hasDiscount {
+                                    Text(session.priceDisplay)
+                                        .font(.subheadline)
+                                        .foregroundColor(.appTextTertiary)
+                                        .strikethrough()
+                                }
+                                Text("\(effectivePrice) per player")
+                                    .font(.subheadline.bold())
+                                    .foregroundColor(.appAccentOrange)
+                            }
+                            if hasDiscount {
+                                Text("Save \((session.priceCents - session.effectivePriceCents(iosDiscountCents: discountCents)).currencyDisplay) in app")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.appSuccess)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(Color.appSuccess.opacity(0.15))
+                                    .clipShape(Capsule())
+                            }
                         }
                         .padding()
                         .background(Color.appSurface)

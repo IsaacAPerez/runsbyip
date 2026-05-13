@@ -4,8 +4,11 @@ import PhotosUI
 struct ChatView: View {
     @EnvironmentObject var chatService: ChatService
     @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var appConfig: AppConfigService
     @StateObject private var chatWriteGate = ChatWriteGate()
     @Environment(\.scenePhase) private var scenePhase
+
+    @State private var isTogglingChatLock = false
 
     @State private var messageText = ""
     @State private var isLoading = true
@@ -17,7 +20,8 @@ struct ChatView: View {
     @State private var selectedPhotoData: Data?
     @State private var typingResetTask: Task<Void, Never>?
     @State private var showMembers = false
-    @State private var isMuted = false
+
+    private var isMuted: Bool { chatService.currentUserMuted }
 
     @State private var gatePassphrase = ""
     @State private var gateError: String?
@@ -92,10 +96,31 @@ struct ChatView: View {
                             .onAppear {
                                 scrollToBottom(proxy: proxy, animated: false)
                             }
+                            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                                // Pin to the latest message when the keyboard
+                                // comes up so the composer never covers it.
+                                scrollToBottom(proxy: proxy)
+                            }
                         }
                     }
 
                     VStack(spacing: 10) {
+                        // Typing indicator sits above every bottom panel so
+                        // it's visible to muted users, users staring at the
+                        // chat-lock banner, and the gate panel — anywhere
+                        // realtime typing broadcasts land.
+                        if let typingIndicatorText {
+                            HStack(spacing: 8) {
+                                TypingDotsView()
+                                Text(typingIndicatorText)
+                                    .font(.caption)
+                                    .foregroundColor(.appTextSecondary)
+                                Spacer()
+                            }
+                            .padding(.horizontal)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+
                         if isMuted {
                             HStack(spacing: 8) {
                                 Image(systemName: "speaker.slash.fill")
@@ -106,19 +131,17 @@ struct ChatView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                        } else if canUseChatWrites {
-                            if let typingIndicatorText {
-                                HStack(spacing: 8) {
-                                    TypingDotsView()
-                                    Text(typingIndicatorText)
-                                        .font(.caption)
-                                        .foregroundColor(.appTextSecondary)
-                                    Spacer()
-                                }
-                                .padding(.horizontal)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        } else if appConfig.chatSendLocked && !authService.isAdmin {
+                            HStack(spacing: 10) {
+                                Image(systemName: "lock.fill")
+                                    .foregroundColor(.appTextSecondary)
+                                Text("Chat is locked by an admin")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundColor(.appTextSecondary)
                             }
-
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                        } else if canUseChatWrites {
                             if let selectedPhotoPreview {
                                 HStack(spacing: 12) {
                                     Image(uiImage: selectedPhotoPreview)
@@ -209,17 +232,19 @@ struct ChatView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 16) {
-                        if ChatWriteGateConfig.isEnabled, chatWriteGate.isUnlocked {
+                        if authService.isAdmin {
                             Button {
-                                typingResetTask?.cancel()
-                                chatService.setTyping(isTyping: false)
-                                chatWriteGate.lock()
-                                gateError = nil
+                                toggleGlobalChatLock()
                             } label: {
-                                Image(systemName: "lock.open.fill")
-                                    .foregroundColor(.appAccentOrange)
+                                if isTogglingChatLock {
+                                    ProgressView().tint(.appAccentOrange).scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: appConfig.chatSendLocked ? "lock.fill" : "lock.open.fill")
+                                        .foregroundColor(appConfig.chatSendLocked ? .appError : .appAccentOrange)
+                                }
                             }
-                            .accessibilityLabel("Lock chat sending")
+                            .disabled(isTogglingChatLock)
+                            .accessibilityLabel(appConfig.chatSendLocked ? "Unlock chat for everyone" : "Lock chat for everyone")
                         }
                         Button {
                             showMembers = true
@@ -303,8 +328,22 @@ struct ChatView: View {
         }
 
         currentUserId = await userIdTask
-        if let muted = await muteTask { isMuted = muted }
+        _ = await muteTask  // checkMuteStatus() publishes to chatService.currentUserMuted
         isLoading = false
+    }
+
+    private func toggleGlobalChatLock() {
+        guard authService.isAdmin else { return }
+        let next = !appConfig.chatSendLocked
+        isTogglingChatLock = true
+        Task {
+            do {
+                _ = try await appConfig.setChatSendLocked(next)
+            } catch {
+                errorMessage = "Couldn't update chat lock: \(error.localizedDescription)"
+            }
+            isTogglingChatLock = false
+        }
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy, animated: Bool = true) {

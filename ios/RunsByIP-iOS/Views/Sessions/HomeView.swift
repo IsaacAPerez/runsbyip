@@ -245,6 +245,8 @@ private struct HomeStartupSection: View {
 }
 
 private struct NextRunCard: View {
+    @EnvironmentObject var appConfig: AppConfigService
+
     let session: GameSession
     let confirmedCount: Int
     let onRSVP: () -> Void
@@ -252,6 +254,10 @@ private struct NextRunCard: View {
     private var spotsLeft: Int {
         max(session.maxPlayers - confirmedCount, 0)
     }
+
+    private var discountCents: Int { appConfig.iosDiscountCents }
+    private var effectivePrice: String { session.effectivePriceDisplay(iosDiscountCents: discountCents) }
+    private var hasDiscount: Bool { discountCents > 0 && session.effectivePriceCents(iosDiscountCents: discountCents) < session.priceCents }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -281,7 +287,20 @@ private struct NextRunCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 DetailRow(systemImage: "clock.fill", title: session.time)
                 DetailRow(systemImage: "mappin.and.ellipse", title: session.location)
-                DetailRow(systemImage: "creditcard.fill", title: session.priceDisplay)
+                if hasDiscount {
+                    HStack(spacing: 8) {
+                        DetailRow(systemImage: "creditcard.fill", title: effectivePrice)
+                        Text("Save \((session.priceCents - session.effectivePriceCents(iosDiscountCents: discountCents)).currencyDisplay) in app")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.appSuccess)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.appSuccess.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+                } else {
+                    DetailRow(systemImage: "creditcard.fill", title: session.priceDisplay)
+                }
             }
 
             // Spots
@@ -321,7 +340,7 @@ private struct NextRunCard: View {
 
             // CTA
             Button(action: onRSVP) {
-                Text(spotsLeft == 0 ? "RUN IS FULL" : (session.paymentsOpen ? "RSVP & PAY \(session.priceDisplay)" : "LOCK IN"))
+                Text(spotsLeft == 0 ? "RUN IS FULL" : (session.paymentsOpen ? "RSVP & PAY \(effectivePrice)" : "LOCK IN"))
                     .font(.system(size: 15, weight: .black))
                     .tracking(1.2)
                     .frame(maxWidth: .infinity)

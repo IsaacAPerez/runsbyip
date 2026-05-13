@@ -1,9 +1,15 @@
 import SwiftUI
 
 struct SessionCardView: View {
+    @EnvironmentObject var appConfig: AppConfigService
+
     let session: GameSession
     var rsvpCount: Int = 0
     var onRSVP: (() -> Void)?
+
+    private var discountCents: Int { appConfig.iosDiscountCents }
+    private var effectivePrice: String { session.effectivePriceDisplay(iosDiscountCents: discountCents) }
+    private var hasDiscount: Bool { discountCents > 0 && session.effectivePriceCents(iosDiscountCents: discountCents) < session.priceCents }
 
     @State private var now = Date()
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -75,9 +81,23 @@ struct SessionCardView: View {
                             .font(.caption)
                             .foregroundColor(.appTextSecondary)
                         Spacer()
-                        Text(session.priceDisplay)
-                            .font(.caption.bold())
-                            .foregroundColor(.appAccentOrange)
+                        HStack(spacing: 6) {
+                            if hasDiscount {
+                                Text(session.priceDisplay)
+                                    .font(.caption.bold())
+                                    .foregroundColor(.appTextTertiary)
+                                    .strikethrough()
+                            }
+                            Text(effectivePrice)
+                                .font(.caption.bold())
+                                .foregroundColor(.appAccentOrange)
+                        }
+                    }
+                    if hasDiscount {
+                        Text("Save \((session.priceCents - session.effectivePriceCents(iosDiscountCents: discountCents)).currencyDisplay) in app")
+                            .font(.system(size: 10, weight: .semibold))
+                            .tracking(0.4)
+                            .foregroundColor(.appSuccess)
                     }
 
                     GeometryReader { geo in
@@ -143,7 +163,7 @@ struct SessionCardView: View {
                     Button {
                         onRSVP?()
                     } label: {
-                        Text("RSVP & PAY \(session.priceDisplay)")
+                        Text("RSVP & PAY \(effectivePrice)")
                             .font(.system(size: 15, weight: .black))
                             .tracking(2)
                             .frame(maxWidth: .infinity)
@@ -198,4 +218,5 @@ struct CountdownUnit: View {
     )
     .padding()
     .background(Color.appBackground)
+    .environmentObject(AppConfigService())
 }

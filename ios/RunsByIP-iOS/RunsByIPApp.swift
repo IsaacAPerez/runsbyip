@@ -14,6 +14,7 @@ struct RunsByIPApp: App {
     @StateObject private var appRouter = AppRouter()
     @StateObject private var navigationCoordinator = NavigationCoordinator()
     @StateObject private var powService = POWService()
+    @StateObject private var appConfig = AppConfigService()
 
     init() {
         STPAPIClient.shared.publishableKey = StripeConfig.publishableKey
@@ -70,6 +71,7 @@ struct RunsByIPApp: App {
                 .environmentObject(appRouter)
                 .environmentObject(navigationCoordinator)
                 .environmentObject(powService)
+                .environmentObject(appConfig)
                 .onAppear {
                     appRouter.observe(authService: authService)
                     appDelegate.notificationService = notificationService
@@ -130,6 +132,8 @@ struct MainTabView: View {
     @EnvironmentObject var navigationCoordinator: NavigationCoordinator
     @EnvironmentObject var notificationService: NotificationService
     @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var appConfig: AppConfigService
+    @Environment(\.scenePhase) private var scenePhase
 
     private var isAdmin: Bool {
         authService.isAdmin
@@ -170,6 +174,14 @@ struct MainTabView: View {
                 await authService.loadProfile()
             }
 
+            // Fetch admin-tunable config (iOS RSVP discount, chat lock)
+            // once the user is signed in — RLS on app_settings requires an
+            // authenticated session for reads. Then subscribe to realtime so
+            // an admin toggling the chat lock from another device flips the
+            // UI here without a foreground bounce.
+            await appConfig.refresh()
+            await appConfig.startRealtime()
+
             // Request push notification permission on first authenticated launch
             let status = await notificationService.authorizationStatus()
             if status == .notDetermined {
@@ -179,6 +191,13 @@ struct MainTabView: View {
                         UIApplication.shared.registerForRemoteNotifications()
                     }
                 }
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            // Re-pull the discount when the app returns to the foreground so
+            // admin edits land without a relaunch.
+            if newPhase == .active, authService.currentUser != nil {
+                Task { await appConfig.refresh() }
             }
         }
     }

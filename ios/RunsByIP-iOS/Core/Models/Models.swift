@@ -275,6 +275,19 @@ extension GameSession {
     var refundDisplayAfterRunsFee: String {
         max(priceCents - 100, 0).currencyDisplay
     }
+
+    // Apply the admin-configured iOS discount. Stripe rejects PaymentIntents
+    // under 50 cents, so we mirror the edge function's floor — the displayed
+    // price never drops below it.
+    func effectivePriceCents(iosDiscountCents: Int) -> Int {
+        guard iosDiscountCents > 0 else { return priceCents }
+        let capped = min(iosDiscountCents, max(priceCents - 50, 0))
+        return priceCents - capped
+    }
+
+    func effectivePriceDisplay(iosDiscountCents: Int) -> String {
+        effectivePriceCents(iosDiscountCents: iosDiscountCents).currencyDisplay
+    }
 }
 
 extension Int {

@@ -5,6 +5,7 @@ struct AdminDashboardView: View {
     @EnvironmentObject var sessionService: SessionService
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var chatService: ChatService
+    @EnvironmentObject var appConfig: AppConfigService
 
     @State private var rsvpCounts: [String: Int] = [:]
     @State private var isLoading = true
@@ -14,6 +15,8 @@ struct AdminDashboardView: View {
     @State private var isSendingPush = false
     @State private var isCreatingPoll = false
     @State private var isTogglingPayments = false
+    @State private var iosDiscountInput = ""
+    @State private var isSavingDiscount = false
 
     private var supabase: SupabaseClient { SupabaseService.shared.client }
 
@@ -141,6 +144,51 @@ struct AdminDashboardView: View {
                                     )
                                 }
                                 .disabled(isCreatingPoll)
+                            }
+
+                            // iOS RSVP Discount
+                            AdminActionCard(title: "iOS RSVP Discount") {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("Discount applied to iOS-app RSVPs only. Set in cents (e.g. 200 = $2 off). Web charges full price.")
+                                        .font(.caption)
+                                        .foregroundColor(.appTextSecondary)
+
+                                    HStack(spacing: 10) {
+                                        TextField("Cents", text: $iosDiscountInput)
+                                            .keyboardType(.numberPad)
+                                            .padding(12)
+                                            .background(Color.appSurfaceElevated)
+                                            .foregroundColor(.white)
+                                            .cornerRadius(10)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .stroke(Color.appBorder, lineWidth: 1)
+                                            )
+
+                                        Button {
+                                            saveIOSDiscount()
+                                        } label: {
+                                            HStack {
+                                                if isSavingDiscount {
+                                                    ProgressView().tint(.white).scaleEffect(0.8)
+                                                } else {
+                                                    Text("Save")
+                                                        .fontWeight(.semibold)
+                                                }
+                                            }
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 12)
+                                            .background(Color.appAccentOrange)
+                                            .foregroundColor(.appBackground)
+                                            .cornerRadius(AppStyle.buttonCornerRadius)
+                                        }
+                                        .disabled(isSavingDiscount || iosDiscountInput.isEmpty)
+                                    }
+
+                                    Text("Current: \(appConfig.iosDiscountCents.currencyDisplay)")
+                                        .font(.caption.monospaced())
+                                        .foregroundColor(.appTextSecondary)
+                                }
                             }
 
                             // Send Test Push
@@ -300,7 +348,27 @@ struct AdminDashboardView: View {
             }
             .task {
                 await loadData()
+                await appConfig.refresh()
+                iosDiscountInput = "\(appConfig.iosDiscountCents)"
             }
+        }
+    }
+
+    private func saveIOSDiscount() {
+        guard let cents = Int(iosDiscountInput.trimmingCharacters(in: .whitespaces)), cents >= 0 else {
+            showToast("Enter a non-negative integer (cents)")
+            return
+        }
+        isSavingDiscount = true
+        Task {
+            do {
+                let saved = try await appConfig.setIOSDiscountCents(cents)
+                iosDiscountInput = "\(saved)"
+                showToast("iOS discount set to \(saved.currencyDisplay)")
+            } catch {
+                showToast("Failed: \(error.localizedDescription)")
+            }
+            isSavingDiscount = false
         }
     }
 
@@ -644,4 +712,6 @@ private struct AdminRowPill: View {
     AdminDashboardView()
         .environmentObject(SessionService())
         .environmentObject(AuthService())
+        .environmentObject(ChatService())
+        .environmentObject(AppConfigService())
 }

@@ -59,8 +59,10 @@ struct MessageBubbleView: View {
         }
         .padding(.horizontal)
         .fullScreenCover(isPresented: $showImagePreview) {
-            ZStack(alignment: .topTrailing) {
-                Color.black.ignoresSafeArea()
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                    .onTapGesture { showImagePreview = false }
 
                 if let attachmentURL {
                     AsyncImage(url: attachmentURL) { phase in
@@ -69,7 +71,6 @@ struct MessageBubbleView: View {
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
-                                .ignoresSafeArea()
                         case .failure:
                             photoFallback
                                 .padding(24)
@@ -81,8 +82,11 @@ struct MessageBubbleView: View {
                                 .padding(24)
                         }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
                 }
-
+            }
+            .overlay(alignment: .topTrailing) {
                 Button {
                     showImagePreview = false
                 } label: {
@@ -92,6 +96,7 @@ struct MessageBubbleView: View {
                         .padding()
                 }
             }
+            .statusBarHidden()
         }
     }
 

@@ -72,18 +72,45 @@ final class PaymentService: ObservableObject {
 
     // MARK: - Apple Pay
 
-    func makeApplePayRequest(priceCents: Int, label: String) -> PKPaymentRequest {
+    func makeApplePayRequest(
+        priceCents: Int,
+        label: String,
+        discountCents: Int = 0
+    ) -> PKPaymentRequest {
         let request = StripeAPI.paymentRequest(
             withMerchantIdentifier: StripeConfig.merchantId,
             country: "US",
             currency: "USD"
         )
-        request.paymentSummaryItems = [
-            PKPaymentSummaryItem(
-                label: label,
-                amount: NSDecimalNumber(value: Double(priceCents) / 100.0)
-            )
-        ]
+        // PaymentIntent amount on the server already subtracts the discount,
+        // so the PassKit total must match: effective = priceCents.
+        // When there's a discount, surface it as a separate negative line so
+        // the user sees subtotal / discount / total in the Apple Pay sheet.
+        let effective = max(priceCents, 0)
+        if discountCents > 0 {
+            let subtotal = effective + discountCents
+            request.paymentSummaryItems = [
+                PKPaymentSummaryItem(
+                    label: "Subtotal",
+                    amount: NSDecimalNumber(value: Double(subtotal) / 100.0)
+                ),
+                PKPaymentSummaryItem(
+                    label: "App discount",
+                    amount: NSDecimalNumber(value: -Double(discountCents) / 100.0)
+                ),
+                PKPaymentSummaryItem(
+                    label: label,
+                    amount: NSDecimalNumber(value: Double(effective) / 100.0)
+                )
+            ]
+        } else {
+            request.paymentSummaryItems = [
+                PKPaymentSummaryItem(
+                    label: label,
+                    amount: NSDecimalNumber(value: Double(effective) / 100.0)
+                )
+            ]
+        }
         request.requiredBillingContactFields = [.name, .emailAddress]
         return request
     }

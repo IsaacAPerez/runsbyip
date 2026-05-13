@@ -7,6 +7,7 @@ final class ChatService: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var reactionsByMessage: [String: [MessageReaction]] = [:]
     @Published var typingUsers: [ChatTypingUser] = []
+    @Published private(set) var currentUserMuted: Bool = false
 
     private let chatBucket = "chat-media"
     private let jsonDecoder = JSONDecoder()
@@ -15,6 +16,7 @@ final class ChatService: ObservableObject {
     private var messageChannel: RealtimeChannelV2?
     private var reactionChannel: RealtimeChannelV2?
     private var typingChannel: RealtimeChannelV2?
+    private var ownProfileChannel: RealtimeChannelV2?
     private var typingExpiryTask: Task<Void, Never>?
     private var typingExpirations: [String: Date] = [:]
     private var lastTypingEmittedState: Bool?
@@ -113,7 +115,11 @@ final class ChatService: ObservableObject {
     func sendMessage(content: String, photoData: Data? = nil) async throws {
         let user = try await currentUser()
         let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let attachmentPath = try await uploadPhotoIfNeeded(photoData, userId: user.id.uuidString)
+        // Lowercased to match the storage RLS check `auth.uid()::text =
+        // (storage.foldername(name))[1]` — auth.uid() emits a lowercase
+        // UUID and Swift's uuidString is uppercase, so the upload was
+        // rejected with a row-policy violation until normalized.
+        let attachmentPath = try await uploadPhotoIfNeeded(photoData, userId: user.id.uuidString.lowercased())
         let messageType = attachmentPath == nil ? "text" : "photo"
 
         guard !trimmedContent.isEmpty || attachmentPath != nil else { return }
@@ -135,19 +141,62 @@ final class ChatService: ObservableObject {
         }
 
         let displayName = user.userMetadata["display_name"]?.stringValue ?? "Anonymous"
+        let userIdString = user.id.uuidString.lowercased()
+
+        // Optimistic append: show the user's own message immediately so it
+        // doesn't depend on the realtime echo (which can be delayed or, per
+        // load testing, dropped ~5% of the time). After the server insert
+        // returns, swap the temp id for the real one so the realtime echo's
+        // dedup hits and we don't end up with two rows.
+        let tempId = "local-\(UUID().uuidString)"
+        let nowIso = ISO8601DateFormatter().string(from: Date())
+        let optimistic = ChatMessage(
+            id: tempId,
+            userId: userIdString,
+            displayName: displayName,
+            content: trimmedContent,
+            avatarUrl: avatarURLByUserId[userIdString],
+            messageType: messageType,
+            attachmentPath: attachmentPath,
+            createdAt: nowIso
+        )
+        messages.append(optimistic)
+
+        struct InsertedRow: Decodable {
+            let id: String
+        }
 
         do {
-            try await supabase
+            let inserted: InsertedRow = try await supabase
                 .from("messages")
                 .insert(NewMessage(
-                    userId: user.id.uuidString.lowercased(),
+                    userId: userIdString,
                     displayName: displayName,
                     content: trimmedContent,
                     messageType: messageType,
                     attachmentPath: attachmentPath
                 ))
+                .select("id")
+                .single()
                 .execute()
+                .value
+
+            if let idx = messages.firstIndex(where: { $0.id == tempId }) {
+                let prev = messages[idx]
+                messages[idx] = ChatMessage(
+                    id: inserted.id,
+                    userId: prev.userId,
+                    displayName: prev.displayName,
+                    content: prev.content,
+                    avatarUrl: prev.avatarUrl,
+                    messageType: prev.messageType,
+                    attachmentPath: prev.attachmentPath,
+                    createdAt: prev.createdAt
+                )
+            }
         } catch {
+            // Roll back the optimistic row so the user sees the failure.
+            messages.removeAll { $0.id == tempId }
             throw AppError.networkError(error.localizedDescription)
         }
     }
@@ -218,7 +267,8 @@ final class ChatService: ObservableObject {
         async let messages: () = subscribeToMessageInserts()
         async let reactions: () = subscribeToReactionChanges()
         async let typing: () = subscribeToTypingPresence()
-        _ = await (messages, reactions, typing)
+        async let ownProfile: () = subscribeToOwnProfile()
+        _ = await (messages, reactions, typing, ownProfile)
     }
 
     func setTyping(isTyping: Bool) {
@@ -260,9 +310,11 @@ final class ChatService: ObservableObject {
         await messageChannel?.unsubscribe()
         await reactionChannel?.unsubscribe()
         await typingChannel?.unsubscribe()
+        await ownProfileChannel?.unsubscribe()
         messageChannel = nil
         reactionChannel = nil
         typingChannel = nil
+        ownProfileChannel = nil
     }
 
     // MARK: - Mute
@@ -289,9 +341,42 @@ final class ChatService: ObservableObject {
                 .single()
                 .execute()
                 .value
+            currentUserMuted = profile.isMuted
             return profile.isMuted
         } catch {
             return nil
+        }
+    }
+
+    private func subscribeToOwnProfile() async {
+        guard let uid = await currentUserId else { return }
+
+        let channel = supabase.realtimeV2.channel("own-profile-\(uid)")
+        ownProfileChannel = channel
+
+        // Filter to just our row so admin mute toggles on this user land
+        // here immediately. profiles is in the realtime publication and
+        // SELECT RLS is open, so the row is broadcast to the row owner.
+        let updates = channel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "profiles",
+            filter: "id=eq.\(uid)"
+        )
+
+        Task { [weak self] in
+            for await update in updates {
+                guard let self else { return }
+                if let profile = try? update.decodeRecord(as: UserProfile.self, decoder: jsonDecoder) {
+                    self.currentUserMuted = profile.isMuted
+                }
+            }
+        }
+
+        do {
+            try await channel.subscribeWithError()
+        } catch {
+            print("[ChatService] own-profile channel subscribe failed: \(error)")
         }
     }
 

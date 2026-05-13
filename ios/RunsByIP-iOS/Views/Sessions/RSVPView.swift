@@ -8,9 +8,19 @@ struct RSVPView: View {
     @EnvironmentObject var sessionService: SessionService
     @EnvironmentObject var paymentService: PaymentService
     @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var appConfig: AppConfigService
     @Environment(\.dismiss) var dismiss
 
     let session: GameSession
+
+    private var discountCents: Int {
+        let raw = appConfig.iosDiscountCents
+        guard raw > 0 else { return 0 }
+        return min(raw, max(session.priceCents - 50, 0))
+    }
+    private var effectivePriceCents: Int { session.priceCents - discountCents }
+    private var effectivePriceDisplay: String { effectivePriceCents.currencyDisplay }
+    private var hasDiscount: Bool { discountCents > 0 }
 
     private var playerName: String {
         authService.currentProfile?.displayName ?? "Player"
@@ -70,7 +80,7 @@ struct RSVPView: View {
                         VStack(spacing: 0) {
                             SummaryRow(label: "Location", value: session.location)
                             Divider().background(Color.appBorder)
-                            SummaryRow(label: "Price", value: session.priceDisplay)
+                            SummaryRow(label: "Price", value: effectivePriceDisplay)
                             Divider().background(Color.appBorder)
                             SummaryRow(label: "Players", value: "\(session.maxPlayers) max")
                         }
@@ -114,7 +124,7 @@ struct RSVPView: View {
                                             .scaleEffect(0.8)
                                     }
 
-                                    Text(paymentService.isProcessing ? "PROCESSING PAYMENT..." : "LOCK IN SPOT — \(session.priceDisplay)")
+                                    Text(paymentService.isProcessing ? "PROCESSING PAYMENT..." : "LOCK IN SPOT — \(effectivePriceDisplay)")
                                         .font(.system(size: 15, weight: .black))
                                         .tracking(2)
                                 }
@@ -385,6 +395,28 @@ struct RSVPView: View {
 
     private var checkoutFooter: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if hasDiscount {
+                HStack {
+                    Text("Subtotal")
+                        .font(.system(size: 13))
+                        .foregroundColor(.appTextSecondary)
+                    Spacer()
+                    Text(session.priceDisplay)
+                        .font(.system(size: 13))
+                        .foregroundColor(.appTextSecondary)
+                }
+                HStack {
+                    Text("App discount")
+                        .font(.system(size: 13))
+                        .foregroundColor(.appSuccess)
+                    Spacer()
+                    Text("− \(discountCents.currencyDisplay)")
+                        .font(.system(size: 13))
+                        .foregroundColor(.appSuccess)
+                }
+                Divider().background(Color.appBorder)
+            }
+
             HStack {
                 Text("TOTAL")
                     .font(.system(size: 11, weight: .semibold))
@@ -393,7 +425,7 @@ struct RSVPView: View {
 
                 Spacer()
 
-                Text(session.priceDisplay)
+                Text(effectivePriceDisplay)
                     .font(.system(size: 24, weight: .black))
                     .foregroundColor(.white)
             }
@@ -424,8 +456,9 @@ struct RSVPView: View {
         paymentService.resetCheckoutState()
 
         let paymentRequest = paymentService.makeApplePayRequest(
-            priceCents: session.priceCents,
-            label: "RunsByIP — \(session.location)"
+            priceCents: effectivePriceCents,
+            label: "RunsByIP — \(session.location)",
+            discountCents: discountCents
         )
         let authContext = PaymentAuthenticationContext()
 

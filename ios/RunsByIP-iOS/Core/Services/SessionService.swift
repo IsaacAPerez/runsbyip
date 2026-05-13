@@ -143,11 +143,13 @@ final class SessionService: ObservableObject {
                 let sessionId: String
                 let playerName: String
                 let playerEmail: String
+                let platform: String
 
                 enum CodingKeys: String, CodingKey {
                     case sessionId = "session_id"
                     case playerName = "player_name"
                     case playerEmail = "player_email"
+                    case platform
                 }
             }
 
@@ -165,7 +167,8 @@ final class SessionService: ObservableObject {
                     options: .init(body: CheckoutRequest(
                         sessionId: sessionId,
                         playerName: playerName,
-                        playerEmail: playerEmail
+                        playerEmail: playerEmail,
+                        platform: "ios"
                     ))
                 )
 
