@@ -38,6 +38,7 @@ final class ChatService: ObservableObject {
     private var reactionChannel: RealtimeChannelV2?
     private var typingChannel: RealtimeChannelV2?
     private var ownProfileChannel: RealtimeChannelV2?
+    private var profilesChannel: RealtimeChannelV2?
     private var typingExpiryTask: Task<Void, Never>?
     private var typingExpirations: [String: Date] = [:]
     private var lastTypingEmittedState: Bool?
@@ -46,7 +47,12 @@ final class ChatService: ObservableObject {
     // MARK: - State
 
     private var reactionRecords: [MessageReactionRecord] = []
-    private var avatarURLByUserId: [String: String] = [:]
+    /// User-id (lowercased) → avatar URL. Published so cell re-renders
+    /// pick up cache fills that happen after a bubble first appears
+    /// (e.g., the profiles seed completing or a realtime profile update
+    /// landing). Grows additively — entries are never removed by a
+    /// rebuild, only refreshed when we observe a non-empty URL.
+    @Published private(set) var avatarURLByUserId: [String: String] = [:]
     private var ownPendingMessageIds: Set<String> = []
     private var ownPendingReactionInsertIds: Set<String> = []
     private var ownPendingReactionDeleteIds: Set<String> = []
@@ -112,7 +118,7 @@ final class ChatService: ObservableObject {
         if !snap.messages.isEmpty {
             messages = snap.messages
             reactionRecords = snap.reactions
-            rebuildAvatarCache(from: messages)
+            mergeAvatarCache(from: messages)
             rebuildReactions()
             hasLoadedInitial = true
         }
@@ -142,6 +148,13 @@ final class ChatService: ObservableObject {
         // Realtime channels in parallel — each takes ~500ms-2s to confirm.
         async let realtime: () = subscribeAll()
 
+        // Seed avatar cache from profiles in the background so users who
+        // haven't posted yet still render with their picture. This is
+        // additive — it never blanks out an existing entry.
+        Task { [weak self] in
+            await self?.seedAvatarCacheFromProfiles()
+        }
+
         // Network reconcile in the background — UI is already painted from disk.
         Task { [weak self] in
             await self?.fetchMessages()
@@ -164,10 +177,12 @@ final class ChatService: ObservableObject {
         await reactionChannel?.unsubscribe()
         await typingChannel?.unsubscribe()
         await ownProfileChannel?.unsubscribe()
+        await profilesChannel?.unsubscribe()
         messageChannel = nil
         reactionChannel = nil
         typingChannel = nil
         ownProfileChannel = nil
+        profilesChannel = nil
 
         messages = []
         reactionRecords = []
@@ -201,7 +216,7 @@ final class ChatService: ObservableObject {
             // first time — if disk had older rows, we still have more to
             // page even when the server returned fewer than pageSize.
             hasMoreOlderMessages = latest.count == Self.pageSize || messages.count > server.count
-            rebuildAvatarCache(from: messages)
+            mergeAvatarCache(from: messages)
 
             try await fetchReactions(forMessageIds: messages.map(\.id))
             hasLoadedInitial = true
@@ -235,7 +250,7 @@ final class ChatService: ObservableObject {
             let deduped = prepend.filter { !existingIds.contains($0.id) }
             messages.insert(contentsOf: deduped, at: 0)
             hasMoreOlderMessages = older.count == Self.pageSize
-            rebuildAvatarCache(from: messages)
+            mergeAvatarCache(from: messages)
 
             if !deduped.isEmpty {
                 try? await fetchReactions(forMessageIds: deduped.map(\.id), merge: true)
@@ -262,7 +277,7 @@ final class ChatService: ObservableObject {
                 .value
 
             mergeRemoteMessages(newer)
-            rebuildAvatarCache(from: messages)
+            mergeAvatarCache(from: messages)
 
             try await fetchReactions(forMessageIds: messages.map(\.id))
             persistToDisk()
@@ -304,15 +319,50 @@ final class ChatService: ObservableObject {
         return nil
     }
 
-    private func rebuildAvatarCache(from messages: [ChatMessage]) {
-        var next: [String: String] = [:]
+    /// Merges any non-empty avatar URLs from the given messages into the
+    /// cache. Never removes entries — a row arriving with nil avatar (e.g.,
+    /// a realtime insert before hydration completes) must not blank out a
+    /// known-good URL.
+    private func mergeAvatarCache(from messages: [ChatMessage]) {
         for m in messages {
             let uid = m.userId.lowercased()
             if let u = m.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !u.isEmpty {
-                next[uid] = u
+                if avatarURLByUserId[uid] != u {
+                    avatarURLByUserId[uid] = u
+                }
             }
         }
-        avatarURLByUserId = next
+    }
+
+    /// Pre-fills the avatar cache from `profiles` so users who haven't
+    /// posted yet (or whose realtime row arrived without an avatar) still
+    /// render with their picture. Best-effort — chat still works without it.
+    private func seedAvatarCacheFromProfiles() async {
+        struct ProfileAvatar: Decodable {
+            let id: String
+            let avatarUrl: String?
+            enum CodingKeys: String, CodingKey {
+                case id
+                case avatarUrl = "avatar_url"
+            }
+        }
+        do {
+            let rows: [ProfileAvatar] = try await supabase
+                .from("profiles")
+                .select("id, avatar_url")
+                .execute()
+                .value
+            for row in rows {
+                guard let url = row.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !url.isEmpty else { continue }
+                let uid = row.id.lowercased()
+                if avatarURLByUserId[uid] != url {
+                    avatarURLByUserId[uid] = url
+                }
+            }
+        } catch {
+            // best-effort; fallback chain still works
+        }
     }
 
     // MARK: - Send
@@ -721,7 +771,42 @@ final class ChatService: ObservableObject {
         async let r: () = subscribeToReactionChanges()
         async let t: () = subscribeToTypingPresence()
         async let p: () = subscribeToOwnProfile()
-        _ = await (m, r, t, p)
+        async let allP: () = subscribeToAllProfileUpdates()
+        _ = await (m, r, t, p, allP)
+    }
+
+    /// Listens for any profile UPDATE so avatar changes propagate to the
+    /// cache while the user is in the app. We don't try to rewrite avatar
+    /// URLs on existing message rows — `effectiveAvatarURL` checks the
+    /// cache as a fallback, so new bubble renders pick up the latest URL.
+    private func subscribeToAllProfileUpdates() async {
+        let channel = supabase.realtimeV2.channel("profiles-room")
+        profilesChannel = channel
+
+        let updates = channel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "profiles"
+        )
+
+        Task { [weak self] in
+            for await update in updates {
+                guard let self else { return }
+                guard let profile = try? update.decodeRecord(as: UserProfile.self, decoder: jsonDecoder) else { continue }
+                let uid = profile.id.lowercased()
+                if let url = profile.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty {
+                    if self.avatarURLByUserId[uid] != url {
+                        self.avatarURLByUserId[uid] = url
+                    }
+                }
+            }
+        }
+
+        do {
+            try await channel.subscribeWithError()
+        } catch {
+            print("[ChatService] profiles channel subscribe failed: \(error)")
+        }
     }
 
     private func subscribeToMessageInserts() async {
