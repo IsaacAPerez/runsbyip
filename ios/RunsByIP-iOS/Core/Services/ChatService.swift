@@ -356,7 +356,12 @@ final class ChatService: ObservableObject {
     }
 
     /// Queue callback: row landed on the server. Swap the temp row for one
-    /// keyed by the server id so realtime echoes dedup against it.
+    /// keyed by the server id so realtime echoes dedup against it. The
+    /// optimistic row may be missing fields the queue learned later — most
+    /// importantly `attachment_path` for photo sends, which is unknown
+    /// until the upload completes inside the worker. Always hydrate from
+    /// the view so the sender's bubble picks up the photo + joined profile
+    /// data without waiting for a refetchSinceLastSeen later.
     func outboundDidSucceed(tempId: String, serverId: String) {
         ownPendingMessageIds.insert(serverId)
         Task { [weak self] in
@@ -366,15 +371,13 @@ final class ChatService: ObservableObject {
 
         // If the realtime echo beat us to the punch, the server row is
         // already present. Drop the temp row and let the echo stand.
-        if let serverIdx = messages.firstIndex(where: { $0.id == serverId }) {
-            // Mark sent.
+        if messages.contains(where: { $0.id == serverId }) {
             deliveryStateById[tempId] = nil
             messages.removeAll { $0.id == tempId }
-            // Hydrate avatar if missing on the echo row.
-            let echoRow = messages[serverIdx]
-            if (echoRow.avatarUrl ?? "").isEmpty {
-                Task { [weak self] in await self?.hydrateMessageFromView(id: serverId) }
-            }
+            // Re-fetch the joined row so we get avatar + display_name from
+            // messages_with_profiles (realtime inserts only carry `messages`
+            // columns).
+            Task { [weak self] in await self?.hydrateMessageFromView(id: serverId) }
             persistToDisk()
             return
         }
@@ -393,6 +396,9 @@ final class ChatService: ObservableObject {
             )
             deliveryStateById[tempId] = nil
             deliveryStateById[serverId] = .sent
+            // Hydrate to fill in fields the optimistic row didn't have —
+            // notably attachment_path for photo sends.
+            Task { [weak self] in await self?.hydrateMessageFromView(id: serverId) }
         }
         persistToDisk()
     }
