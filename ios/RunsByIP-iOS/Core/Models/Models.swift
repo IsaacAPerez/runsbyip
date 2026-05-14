@@ -13,6 +13,8 @@ struct GameSession: Codable, Identifiable {
     let status: String // "open", "completed", or "cancelled"
     let paymentsOpen: Bool
     let createdAt: String
+    let latitude: Double?
+    let longitude: Double?
 
     enum CodingKeys: String, CodingKey {
         case id, date, time, location, status
@@ -21,6 +23,57 @@ struct GameSession: Codable, Identifiable {
         case maxPlayers = "max_players"
         case paymentsOpen = "payments_open"
         case createdAt = "created_at"
+        case latitude, longitude
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        date = try c.decode(String.self, forKey: .date)
+        time = try c.decode(String.self, forKey: .time)
+        location = try c.decode(String.self, forKey: .location)
+        priceCents = try c.decode(Int.self, forKey: .priceCents)
+        minPlayers = try c.decode(Int.self, forKey: .minPlayers)
+        maxPlayers = try c.decode(Int.self, forKey: .maxPlayers)
+        status = try c.decode(String.self, forKey: .status)
+        paymentsOpen = try c.decode(Bool.self, forKey: .paymentsOpen)
+        createdAt = try c.decode(String.self, forKey: .createdAt)
+        // Tolerant decode for the optional coords — migration 029 added
+        // them, and rows decoded from views that don't surface those
+        // columns simply default to nil.
+        latitude = try c.decodeIfPresent(Double.self, forKey: .latitude)
+        longitude = try c.decodeIfPresent(Double.self, forKey: .longitude)
+    }
+
+    // Memberwise init for previews / synthetic construction sites.
+    // Swift only synthesizes this automatically when no explicit init
+    // exists; once we added init(from:), we need to provide this too.
+    init(
+        id: String,
+        date: String,
+        time: String,
+        location: String,
+        priceCents: Int,
+        minPlayers: Int,
+        maxPlayers: Int,
+        status: String,
+        paymentsOpen: Bool,
+        createdAt: String,
+        latitude: Double? = nil,
+        longitude: Double? = nil
+    ) {
+        self.id = id
+        self.date = date
+        self.time = time
+        self.location = location
+        self.priceCents = priceCents
+        self.minPlayers = minPlayers
+        self.maxPlayers = maxPlayers
+        self.status = status
+        self.paymentsOpen = paymentsOpen
+        self.createdAt = createdAt
+        self.latitude = latitude
+        self.longitude = longitude
     }
 }
 
@@ -282,6 +335,26 @@ extension GameSession {
         return formatter.string(from: parsed).uppercased()
     }
 
+    /// "TONIGHT" / "TOMORROW" / "FRIDAY" / "MAR 14" depending on how
+    /// far away the session is. Used by the home header for a more
+    /// alive feel than just the raw date.
+    var conversationalDayLabel: String {
+        guard let parsed = parsedDate else { return formattedShortDate }
+        let cal = Calendar.current
+        let now = Date()
+        let daysAway = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: parsed)).day ?? 0
+        switch daysAway {
+        case 0: return "TONIGHT"
+        case 1: return "TOMORROW"
+        case 2...6:
+            let f = DateFormatter()
+            f.dateFormat = "EEEE"
+            return f.string(from: parsed).uppercased()
+        default:
+            return formattedMonthDay
+        }
+    }
+
     var priceDisplay: String {
         priceCents.currencyDisplay
     }
@@ -404,6 +477,36 @@ struct LeaderboardEntry: Identifiable, Equatable {
     let playerName: String
     let gameCount: Int
     var id: String { playerName }
+}
+
+// MARK: - Run vibe (post-game rating)
+
+enum RunVibe: String, Codable, CaseIterable, Identifiable {
+    case fire
+    case mid
+    case dud
+
+    var id: String { rawValue }
+    var emoji: String {
+        switch self {
+        case .fire: return "🔥"
+        case .mid: return "😐"
+        case .dud: return "💀"
+        }
+    }
+    var label: String {
+        switch self {
+        case .fire: return "Fire"
+        case .mid: return "Mid"
+        case .dud: return "Dud"
+        }
+    }
+}
+
+struct RunVibeTally: Codable, Identifiable, Equatable {
+    let vibe: String
+    let votes: Int
+    var id: String { vibe }
 }
 
 // MARK: - Session participant (RSVP joined to profile)

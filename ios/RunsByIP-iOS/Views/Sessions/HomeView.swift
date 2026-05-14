@@ -16,6 +16,12 @@ struct HomeView: View {
     @State private var galleryURLs: [URL] = []
     @State private var sessionForRSVP: GameSession?
     @State private var participants: [RSVPParticipant] = []
+    @State private var attendanceStreak: Int = 0
+    @State private var lastCompletedSession: GameSession?
+    @State private var myVibe: RunVibe?
+    @State private var vibeTallies: [RunVibeTally] = []
+    @State private var forecast: WeatherService.Forecast?
+    @StateObject private var weatherService = WeatherService()
 
     /// Tab returns fire .task again, which previously refetched the
     /// leaderboard and reassigned it — SwiftUI then re-rendered the card
@@ -66,7 +72,8 @@ struct HomeView: View {
                         // Header overlay on top of hero
                         HomeHeader(
                             firstName: firstName,
-                            hasUpcomingSession: currentSession != nil,
+                            upcomingSession: currentSession,
+                            streak: attendanceStreak,
                             onBrowseRuns: { showAllRuns = true }
                         )
                         .padding(.top, 280)
@@ -82,10 +89,25 @@ struct HomeView: View {
                                     sessionForRSVP = session
                                 }
                             )
+
+                            if let forecast {
+                                WeatherChip(forecast: forecast, dayLabel: session.conversationalDayLabel)
+                            }
                         } else if isLoading && !hasLoadedOnce {
                             HomeStartupCard()
                         } else {
                             EmptyCountdownCard()
+                        }
+
+                        if let completed = lastCompletedSession {
+                            VibeRatingCard(
+                                session: completed,
+                                myVibe: myVibe,
+                                tallies: vibeTallies,
+                                onVote: { vibe in
+                                    Task { await submitVibe(vibe, sessionId: completed.id) }
+                                }
+                            )
                         }
 
                         if isLoading && !hasLoadedOnce {
@@ -161,6 +183,50 @@ struct HomeView: View {
         }
     }
 
+    private func refreshStreak() async {
+        guard let email = authService.currentProfile?.email, !email.isEmpty else {
+            attendanceStreak = 0
+            return
+        }
+        attendanceStreak = await sessionService.fetchAttendanceStreak(forEmail: email)
+    }
+
+    private func refreshForecast() async {
+        if let session = sessionService.currentSession {
+            forecast = await weatherService.forecast(for: session)
+        } else {
+            forecast = nil
+        }
+    }
+
+    private func refreshLastCompletedAndVibe() async {
+        let session = await sessionService.fetchMostRecentCompletedSession()
+        lastCompletedSession = session
+        guard let session, let uid = authService.currentUser?.id.uuidString else {
+            myVibe = nil
+            vibeTallies = []
+            return
+        }
+        async let mine = sessionService.fetchMyVibe(for: session.id, userId: uid.lowercased())
+        async let tally = sessionService.fetchVibeTally(for: session.id)
+        myVibe = await mine
+        vibeTallies = await tally
+    }
+
+    private func submitVibe(_ vibe: RunVibe, sessionId: String) async {
+        guard let uid = authService.currentUser?.id.uuidString.lowercased() else { return }
+        let previous = myVibe
+        myVibe = vibe
+        do {
+            try await sessionService.submitVibe(vibe, for: sessionId, userId: uid)
+            Haptics.success()
+            vibeTallies = await sessionService.fetchVibeTally(for: sessionId)
+        } catch {
+            myVibe = previous
+            Haptics.error()
+        }
+    }
+
     private func loadData() async {
         if !hasLoadedOnce { isLoading = true }
         errorMessage = nil
@@ -193,6 +259,12 @@ struct HomeView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+        // Fire all the home-extras concurrently in the background. They
+        // each tolerate failure and degrade to "hide the chip/card".
+        Task { await refreshStreak() }
+        Task { await refreshForecast() }
+        Task { await refreshLastCompletedAndVibe() }
+
         isLoading = false
         hasLoadedOnce = true
     }
@@ -200,29 +272,56 @@ struct HomeView: View {
 
 private struct HomeHeader: View {
     let firstName: String
-    let hasUpcomingSession: Bool
+    let upcomingSession: GameSession?
+    let streak: Int
     let onBrowseRuns: () -> Void
 
     private var dateLabel: String {
+        if let session = upcomingSession {
+            return session.conversationalDayLabel
+        }
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMM d"
         return formatter.string(from: Date()).uppercased()
     }
 
+    private var title: String {
+        if let session = upcomingSession {
+            switch session.conversationalDayLabel {
+            case "TONIGHT": return "Tip-off tonight, \(firstName)."
+            case "TOMORROW": return "Tomorrow night, \(firstName)."
+            default: return "Next run, \(firstName)."
+            }
+        }
+        return "Stay loose, \(firstName)."
+    }
+
+    private var subtitle: String {
+        if upcomingSession != nil {
+            return "Everything important is below."
+        }
+        return "No run on the books — yet."
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(dateLabel)
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(1.4)
-                    .foregroundColor(.appTextSecondary)
+                HStack(spacing: 8) {
+                    Text(dateLabel)
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(1.4)
+                        .foregroundColor(.appTextSecondary)
+                    if streak > 1 {
+                        StreakPill(weeks: streak)
+                    }
+                }
 
-                Text(hasUpcomingSession ? "Next run, \(firstName)." : "Stay ready, \(firstName).")
+                Text(title)
                     .font(.system(size: 30, weight: .black).width(.condensed))
                     .foregroundColor(.white)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text(hasUpcomingSession ? "Everything important is below." : "No clutter, just the essentials.")
+                Text(subtitle)
                     .font(.subheadline)
                     .foregroundColor(.appTextSecondary)
             }
@@ -239,6 +338,25 @@ private struct HomeHeader: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Browse runs")
         }
+    }
+}
+
+private struct StreakPill: View {
+    let weeks: Int
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text("🔥")
+                .font(.system(size: 11))
+            Text("\(weeks)w streak")
+                .font(.system(size: 10, weight: .heavy).width(.condensed))
+                .tracking(0.8)
+                .foregroundColor(.appAccentOrange)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(Color.appAccentOrange.opacity(0.15), in: Capsule())
+        .overlay(Capsule().stroke(Color.appAccentOrange.opacity(0.45), lineWidth: 1))
     }
 }
 
@@ -333,7 +451,12 @@ private struct NextRunCard: View {
             // Details
             VStack(alignment: .leading, spacing: 12) {
                 DetailRow(systemImage: "clock.fill", title: session.time)
-                DetailRow(systemImage: "mappin.and.ellipse", title: session.location)
+                DetailRow(
+                    systemImage: "mappin.and.ellipse",
+                    title: session.location,
+                    onTap: { openInMaps(session: session) },
+                    trailingHint: "Directions"
+                )
                 if hasDiscount {
                     HStack(spacing: 8) {
                         DetailRow(systemImage: "creditcard.fill", title: effectivePrice)
@@ -410,6 +533,24 @@ private struct NextRunCard: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(Color.appBorder, lineWidth: 1)
         )
+    }
+
+    /// Open Apple Maps to the session's location. Prefers coords (so
+    /// the pin lands on the actual court) and falls back to a query
+    /// string of the location name when coords are missing.
+    private func openInMaps(session: GameSession) {
+        Haptics.selection()
+        if let lat = session.latitude, let lon = session.longitude {
+            let url = URL(string: "maps://?ll=\(lat),\(lon)&q=\(session.location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")")
+            if let url, UIApplication.shared.canOpenURL(url) {
+                UIApplication.shared.open(url)
+                return
+            }
+        }
+        if let encoded = session.location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+           let url = URL(string: "maps://?q=\(encoded)") {
+            UIApplication.shared.open(url)
+        }
     }
 }
 
@@ -524,19 +665,129 @@ private struct CountdownSection: View {
 private struct DetailRow: View {
     let systemImage: String
     let title: String
+    var onTap: (() -> Void)? = nil
+    var trailingHint: String? = nil
+
+    var body: some View {
+        Button {
+            onTap?()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .foregroundColor(.appAccentOrange)
+                    .frame(width: 20)
+
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+
+                Spacer(minLength: 0)
+
+                if let trailingHint {
+                    Text(trailingHint)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.appAccentOrange)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(onTap == nil)
+    }
+}
+
+// MARK: - Weather chip
+
+private struct WeatherChip: View {
+    let forecast: WeatherService.Forecast
+    let dayLabel: String
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: systemImage)
+            Image(systemName: forecast.symbol)
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.appAccentOrange)
-                .frame(width: 20)
-
-            Text(title)
-                .font(.subheadline)
-                .foregroundColor(.white)
-
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(forecast.temperatureF)° · \(forecast.conditionLabel)")
+                    .font(.system(size: 14, weight: .heavy).width(.condensed))
+                    .foregroundColor(.white)
+                Text("Forecast for \(dayLabel.capitalized)")
+                    .font(.caption2)
+                    .foregroundColor(.appTextSecondary)
+            }
             Spacer(minLength: 0)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.appSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.appBorder, lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Vibe rating card
+
+private struct VibeRatingCard: View {
+    let session: GameSession
+    let myVibe: RunVibe?
+    let tallies: [RunVibeTally]
+    let onVote: (RunVibe) -> Void
+
+    private func count(for vibe: RunVibe) -> Int {
+        tallies.first(where: { $0.vibe == vibe.rawValue })?.votes ?? 0
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "thermometer.medium")
+                    .foregroundColor(.appAccentOrange)
+                Text("RATE THE RUN — \(session.formattedShortDate.uppercased())")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .tracking(1.2)
+                    .foregroundColor(.appTextSecondary)
+                Spacer()
+            }
+
+            HStack(spacing: 10) {
+                ForEach(RunVibe.allCases) { vibe in
+                    Button {
+                        Haptics.selection()
+                        onVote(vibe)
+                    } label: {
+                        VStack(spacing: 4) {
+                            Text(vibe.emoji).font(.system(size: 26))
+                            Text("\(count(for: vibe))")
+                                .font(.system(size: 13, weight: .black).width(.condensed))
+                                .foregroundColor(myVibe == vibe ? .appAccentOrange : .appTextSecondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            myVibe == vibe
+                                ? Color.appAccentOrange.opacity(0.18)
+                                : Color.appSurfaceElevated
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(
+                                    myVibe == vibe ? Color.appAccentOrange.opacity(0.55) : Color.appBorder,
+                                    lineWidth: 1
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(20)
+        .background(Color.appSurface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.appBorder, lineWidth: 1)
+        )
     }
 }
 

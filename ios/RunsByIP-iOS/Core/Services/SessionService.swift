@@ -104,6 +104,94 @@ final class SessionService: ObservableObject {
 
     // MARK: - RSVPs
 
+    // MARK: - Personal attendance streak
+
+    /// Number of consecutive most-recent past sessions this email has
+    /// an RSVP for. Source-of-truth lives in the
+    /// attendance_streak_for_email Postgres function (migration 027).
+    func fetchAttendanceStreak(forEmail email: String) async -> Int {
+        struct Params: Encodable {
+            let p_email: String
+        }
+        guard !email.isEmpty else { return 0 }
+        return (try? await supabase
+            .rpc("attendance_streak_for_email", params: Params(p_email: email))
+            .execute()
+            .value) ?? 0
+    }
+
+    // MARK: - Run vibes (post-game rating)
+
+    func fetchVibeTally(for sessionId: String) async -> [RunVibeTally] {
+        struct Params: Encodable {
+            let p_session_id: String
+        }
+        return (try? await supabase
+            .rpc("run_vibe_tally", params: Params(p_session_id: sessionId))
+            .execute()
+            .value) ?? []
+    }
+
+    func fetchMyVibe(for sessionId: String, userId: String) async -> RunVibe? {
+        struct Row: Decodable { let vibe: String }
+        do {
+            let rows: [Row] = try await supabase
+                .from("run_vibes")
+                .select("vibe")
+                .eq("session_id", value: sessionId)
+                .eq("user_id", value: userId)
+                .limit(1)
+                .execute()
+                .value
+            return rows.first.flatMap { RunVibe(rawValue: $0.vibe) }
+        } catch {
+            return nil
+        }
+    }
+
+    func submitVibe(_ vibe: RunVibe, for sessionId: String, userId: String) async throws {
+        struct VibeRow: Encodable {
+            let sessionId: String
+            let userId: String
+            let vibe: String
+
+            enum CodingKeys: String, CodingKey {
+                case sessionId = "session_id"
+                case userId = "user_id"
+                case vibe
+            }
+        }
+        // Upsert keyed by (session_id, user_id) so re-voting overwrites
+        // the user's previous choice instead of erroring on the unique
+        // constraint.
+        try await supabase
+            .from("run_vibes")
+            .upsert(
+                VibeRow(sessionId: sessionId, userId: userId, vibe: vibe.rawValue),
+                onConflict: "session_id,user_id"
+            )
+            .execute()
+    }
+
+    /// Most recent completed session (so the home page can prompt the
+    /// user to rate it). Returns nil if there is none.
+    func fetchMostRecentCompletedSession() async -> GameSession? {
+        do {
+            let rows: [GameSession] = try await supabase
+                .from("sessions")
+                .select()
+                .eq("status", value: "completed")
+                .order("date", ascending: false)
+                .order("time", ascending: false)
+                .limit(1)
+                .execute()
+                .value
+            return rows.first
+        } catch {
+            return nil
+        }
+    }
+
     /// RSVPs joined to profiles (by lower(email)) so the home card can
     /// render a stack of "who's coming" avatars. Profile fields are
     /// nullable in the join — RSVPs from guests who never created a

@@ -66,6 +66,7 @@
 		E1EB7A96F0E82EF71E10B8C9 /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF6867E096B4E714E204394 /* SupabaseService.swift */; };
 		EB49CC744E95ABCFE4E7E920 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A21B7B63E4F81170C5B2BF1 /* AuthService.swift */; };
 		EBC75242EFED8E2A39A36C4C /* InAppMessageBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 345AD1CDC742FAF99C07B522 /* InAppMessageBanner.swift */; };
+		F2D2247B2352334885FE5350 /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EA75994E0E1CB609BEF44D1 /* WeatherService.swift */; };
 		F36E80DC116D4C3AE9C3AB3B /* StripeApplePay in Frameworks */ = {isa = PBXBuildFile; productRef = 49844877ABB399B3A3AB67DE /* StripeApplePay */; };
 		FC131E004C2237596B13A3EE /* ChatOutboundQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12421C78E61976BC294ECB1E /* ChatOutboundQueue.swift */; };
 /* End PBXBuildFile section */
@@ -102,6 +103,7 @@
 		85639DE014630B911C7DC1CE /* ChatDiskCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDiskCache.swift; sourceTree = "<group>"; };
 		86960DFAAF0E2FE4233E2B15 /* EmojiPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiPickerView.swift; sourceTree = "<group>"; };
 		8AA9BBCC60CC667796CD7259 /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
+		8EA75994E0E1CB609BEF44D1 /* WeatherService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
 		8EEE3D88652D6E68B3A90BB4 /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
 		971EA2DE800BBBAEE983057A /* BadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeView.swift; sourceTree = "<group>"; };
 		9C610DD78757AB371ABEEA52 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
@@ -281,6 +283,7 @@
 				184BE1D7A646185980C24A37 /* POWService.swift */,
 				7CC20AC94D20854C0B1609FF /* SessionService.swift */,
 				4BF6867E096B4E714E204394 /* SupabaseService.swift */,
+				8EA75994E0E1CB609BEF44D1 /* WeatherService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -486,6 +489,7 @@
 				C2268B8D0F70C1AD4CFC6DF1 /* ToastView.swift in Sources */,
 				90FB1CA23672DA7C2CB6FD48 /* UserPublicProfileView.swift in Sources */,
 				0DFD6F86AF2E340317F00ABF /* View+Loading.swift in Sources */,
+				F2D2247B2352334885FE5350 /* WeatherService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
