@@ -73,23 +73,12 @@ struct MessageBubbleView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .ignoresSafeArea()
                     } else {
-                        AsyncImage(url: attachmentURL) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                            case .failure:
-                                photoFallback
-                                    .padding(24)
-                            case .empty:
-                                ProgressView()
-                                    .tint(.white)
-                            @unknown default:
-                                photoFallback
-                                    .padding(24)
-                            }
-                        }
+                        CachedAsyncImage(
+                            url: attachmentURL,
+                            contentMode: .fit,
+                            failure: { photoFallback.padding(24) },
+                            loading: { ProgressView().tint(.white) }
+                        )
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .ignoresSafeArea()
                     }
@@ -151,28 +140,21 @@ struct MessageBubbleView: View {
                     Button {
                         showImagePreview = true
                     } label: {
-                        AsyncImage(url: attachmentURL) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 220, height: 220)
-                                    .clipped()
-                            case .failure:
-                                photoFallback
-                            case .empty:
+                        CachedAsyncImage(
+                            url: attachmentURL,
+                            contentMode: .fill,
+                            failure: { photoFallback },
+                            loading: {
                                 ZStack {
                                     RoundedRectangle(cornerRadius: 18)
                                         .fill(Color.appSurface)
                                     ProgressView()
                                         .tint(.white)
                                 }
-                            @unknown default:
-                                photoFallback
                             }
-                        }
+                        )
                         .frame(width: 220, height: 220)
+                        .clipped()
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay(alignment: .topTrailing) {
                             Image(systemName: "photo")

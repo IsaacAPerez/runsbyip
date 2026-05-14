@@ -51,6 +51,7 @@
 		BF055950D043BA72D446E180 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DC9DC78F3FBDC625E4F831E2 /* Supabase */; };
 		C0B0D27D3124D46E4A006897 /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A277CB45FC2E49584A44076B /* AppRouter.swift */; };
 		C2268B8D0F70C1AD4CFC6DF1 /* ToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45E7AE55CEFCC4CA740124D5 /* ToastView.swift */; };
+		C3425FF266C07FDC4352BDFC /* CachedAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 250476B69082E840E96E1152 /* CachedAsyncImage.swift */; };
 		C3849BFDF7AD0282D5DBF597 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2D17CD550A7C7D9AEA96B7A /* Models.swift */; };
 		C7CA3BD09DAAFC736F4BA0D1 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42099E3A4BBB61724D08607A /* NotificationService.swift */; };
 		C8B5EDAC68DDFBABD9B3642D /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5636799E22A4668CBFAFA58E /* EmptyStateView.swift */; };
@@ -74,6 +75,7 @@
 		184BE1D7A646185980C24A37 /* POWService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = POWService.swift; sourceTree = "<group>"; };
 		1959B9DD9898C2D0992E4C32 /* View+Loading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Loading.swift"; sourceTree = "<group>"; };
 		24CC3B759134E70C3D9D82BD /* Color+App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+App.swift"; sourceTree = "<group>"; };
+		250476B69082E840E96E1152 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
 		2760C0801B49CA903B4BE693 /* PlayerRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerRowView.swift; sourceTree = "<group>"; };
 		345AD1CDC742FAF99C07B522 /* InAppMessageBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InAppMessageBanner.swift; sourceTree = "<group>"; };
 		35D1619C42A8901D6962DD69 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -176,6 +178,7 @@
 				D1C9891FF7B5E549DA8FD847 /* AnimatedGifView.swift */,
 				E4EF9200262867E62FD9389F /* AvatarView.swift */,
 				971EA2DE800BBBAEE983057A /* BadgeView.swift */,
+				250476B69082E840E96E1152 /* CachedAsyncImage.swift */,
 				5636799E22A4668CBFAFA58E /* EmptyStateView.swift */,
 				673C3C19F5026DCFBED6EC53 /* HeroGalleryView.swift */,
 				115356677835FDBFB28A9EFC /* LoadingView.swift */,
@@ -423,6 +426,7 @@
 				EB49CC744E95ABCFE4E7E920 /* AuthService.swift in Sources */,
 				A741B5E8E852306D9E6A3BBE /* AvatarView.swift in Sources */,
 				3544D7295365EC6E7912BF36 /* BadgeView.swift in Sources */,
+				C3425FF266C07FDC4352BDFC /* CachedAsyncImage.swift in Sources */,
 				A4D91AF64813683C169A206B /* ChatDiskCache.swift in Sources */,
 				FC131E004C2237596B13A3EE /* ChatOutboundQueue.swift in Sources */,
 				CA858B8532BA5CEE9DD17F7F /* ChatService.swift in Sources */,
