@@ -12,6 +12,9 @@ struct MessageBubbleView: View {
     var onReact: (String) -> Void
     /// When `false`, reactions and quick-emoji UI are disabled (chat write gate).
     var reactionsAllowed: Bool = true
+    var deliveryState: MessageDeliveryState = .sent
+    var onRetry: (() -> Void)?
+    var onCancelFailed: (() -> Void)?
 
     @State private var showImagePreview = false
 
@@ -169,22 +172,45 @@ struct MessageBubbleView: View {
                         .cornerRadius(16, corners: isCurrentUser
                             ? [.topLeft, .topRight, .bottomLeft]
                             : [.topLeft, .topRight, .bottomRight])
+                        .opacity(isPendingForUser ? 0.65 : 1.0)
                 }
             }
             .modifier(ReactionContextMenuModifier(
-                reactionsAllowed: reactionsAllowed,
+                reactionsAllowed: reactionsAllowed && isDeliverySent,
                 quickReactions: quickReactions,
                 onReact: onReact
             ))
+
+            if isCurrentUser, case .failed(let reason) = deliveryState {
+                FailedSendRow(reason: reason, onRetry: onRetry, onCancel: onCancelFailed)
+            } else if isPendingForUser {
+                HStack(spacing: 4) {
+                    ProgressView().scaleEffect(0.6).tint(.appTextSecondary)
+                    Text("Sending…")
+                        .font(.caption2)
+                        .foregroundColor(.appTextSecondary)
+                }
+            }
 
             ReactionBar(
                 reactions: reactions,
                 currentUserId: currentUserId,
                 quickReactions: quickReactions,
-                reactionsAllowed: reactionsAllowed,
+                reactionsAllowed: reactionsAllowed && isDeliverySent,
                 onReact: onReact
             )
         }
+    }
+
+    private var isDeliverySent: Bool {
+        if case .sent = deliveryState { return true }
+        return false
+    }
+
+    private var isPendingForUser: Bool {
+        guard isCurrentUser else { return false }
+        if case .pending = deliveryState { return true }
+        return false
     }
 
     private var photoFallback: some View {
@@ -201,6 +227,46 @@ struct MessageBubbleView: View {
             }
         }
         .frame(width: 220, height: 220)
+    }
+}
+
+private struct FailedSendRow: View {
+    let reason: String
+    let onRetry: (() -> Void)?
+    let onCancel: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundColor(.appError)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Couldn't send")
+                    .font(.caption.bold())
+                    .foregroundColor(.appError)
+                Text(reason)
+                    .font(.caption2)
+                    .foregroundColor(.appTextSecondary)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 6)
+            if let onRetry {
+                Button("Retry", action: onRetry)
+                    .font(.caption.bold())
+                    .foregroundColor(.appAccentOrange)
+            }
+            if let onCancel {
+                Button {
+                    onCancel()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption.bold())
+                        .foregroundColor(.appTextSecondary)
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.appError.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 

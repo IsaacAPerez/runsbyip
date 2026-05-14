@@ -133,6 +133,7 @@ struct MainTabView: View {
     @EnvironmentObject var notificationService: NotificationService
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var appConfig: AppConfigService
+    @EnvironmentObject var chatService: ChatService
     @Environment(\.scenePhase) private var scenePhase
 
     private var isAdmin: Bool {
@@ -170,9 +171,22 @@ struct MainTabView: View {
         .tint(Color.appAccentOrange)
         .preferredColorScheme(.dark)
         .task(id: authService.currentUser?.id) {
-            if authService.currentUser != nil, authService.currentProfile == nil {
+            // Sign-out path: tear chat down so realtime channels close and
+            // disk cache + outbound queue rebind on next sign-in.
+            if authService.currentUser == nil {
+                await chatService.shutdown()
+                return
+            }
+
+            if authService.currentProfile == nil {
                 await authService.loadProfile()
             }
+
+            // Bring chat up for this user (idempotent — paints from disk
+            // immediately, starts realtime, replays any pending sends).
+            // We do this here rather than from ChatView so channels stay
+            // alive across tab switches and typing presence remains active.
+            await chatService.bootstrap()
 
             // Fetch admin-tunable config (iOS RSVP discount, chat lock)
             // once the user is signed in — RLS on app_settings requires an

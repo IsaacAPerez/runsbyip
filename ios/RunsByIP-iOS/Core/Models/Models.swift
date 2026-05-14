@@ -110,6 +110,14 @@ struct ChatMessage: Codable, Identifiable, Equatable {
     }
 }
 
+// MARK: - MessageDeliveryState
+
+enum MessageDeliveryState: Equatable {
+    case sent
+    case pending
+    case failed(reason: String)
+}
+
 // MARK: - MessageReaction
 
 struct MessageReactionRecord: Codable, Identifiable, Equatable {

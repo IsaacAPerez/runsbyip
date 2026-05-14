@@ -2,6 +2,10 @@ import Foundation
 @preconcurrency import Supabase
 import Realtime
 
+/// Coordinates chat state across the app. Long-lived: created at launch,
+/// retained through tab switches, torn down only on sign-out. Channels stay
+/// alive while the user is anywhere in the app so typing presence + realtime
+/// inserts work no matter which tab they're looking at.
 @MainActor
 final class ChatService: ObservableObject {
     @Published var messages: [ChatMessage] = []
@@ -9,14 +13,22 @@ final class ChatService: ObservableObject {
     @Published var typingUsers: [ChatTypingUser] = []
     @Published private(set) var currentUserMuted: Bool = false
     @Published private(set) var hasMoreOlderMessages: Bool = false
+    @Published private(set) var hasLoadedInitial: Bool = false
+    @Published private(set) var deliveryStateById: [String: MessageDeliveryState] = [:]
+    @Published private(set) var presenceUserIds: Set<String> = []
 
     static let pageSize: Int = 50
-    private var isLoadingOlder: Bool = false
+    /// Soft cap on in-memory rows. Older rows live on disk and are paged in
+    /// when the user scrolls up. Trim happens after writes that push us over.
+    static let inMemoryCap: Int = 300
 
     private let chatBucket = "chat-media"
     private let jsonDecoder = JSONDecoder()
 
     private var supabase: SupabaseClient { SupabaseService.shared.client }
+
+    // MARK: - Realtime
+
     private var messageChannel: RealtimeChannelV2?
     private var reactionChannel: RealtimeChannelV2?
     private var typingChannel: RealtimeChannelV2?
@@ -25,9 +37,22 @@ final class ChatService: ObservableObject {
     private var typingExpirations: [String: Date] = [:]
     private var lastTypingEmittedState: Bool?
     private var lastTypingEmittedAt: Date?
+
+    // MARK: - State
+
     private var reactionRecords: [MessageReactionRecord] = []
-    /// Populated from `messages_with_profiles`; realtime inserts only include `messages` columns (no avatar).
     private var avatarURLByUserId: [String: String] = [:]
+    private var ownPendingMessageIds: Set<String> = []
+    private var ownPendingReactionInsertIds: Set<String> = []
+    private var ownPendingReactionDeleteIds: Set<String> = []
+    private var isLoadingOlder: Bool = false
+    private var isBootstrapped: Bool = false
+    private var bootstrappedUserId: String?
+
+    // MARK: - Backing services
+
+    private var diskCache: ChatDiskCache?
+    private var outboundQueue: ChatOutboundQueue?
 
     var currentUserId: String? {
         get async {
@@ -35,12 +60,128 @@ final class ChatService: ObservableObject {
         }
     }
 
-    func fetchMessages() async throws {
+    // MARK: - Bootstrap / shutdown
+
+    /// Brings the service up for a signed-in user. Idempotent — calling
+    /// repeatedly is a no-op while channels are healthy. Called from
+    /// `MainTabView.task` so subscriptions span the user's whole session,
+    /// not the chat tab's lifetime.
+    func bootstrap() async {
+        guard let uid = await currentUserId else { return }
+
+        if isBootstrapped, bootstrappedUserId == uid {
+            // Already up — reconcile to catch anything we missed and exit.
+            await refetchSinceLastSeen()
+            return
+        }
+        if isBootstrapped, bootstrappedUserId != uid {
+            await shutdown()
+        }
+
+        let cache = ChatDiskCache(userScope: uid)
+        diskCache = cache
+        let client = supabase
+        let queue = ChatOutboundQueue(
+            userScope: uid,
+            supabase: client,
+            onSucceeded: { [weak self] tempId, serverId in
+                await MainActor.run { [weak self] in
+                    self?.outboundDidSucceed(tempId: tempId, serverId: serverId)
+                }
+            },
+            onUpdated: { [weak self] item, isFinalFailure in
+                await MainActor.run { [weak self] in
+                    self?.outboundDidUpdate(item: item, isFinalFailure: isFinalFailure)
+                }
+            },
+            onCancelled: { [weak self] tempId in
+                await MainActor.run { [weak self] in
+                    self?.outboundDidCancel(tempId: tempId)
+                }
+            }
+        )
+        outboundQueue = queue
+
+        // Paint immediately from disk before the network fetch returns.
+        let snap = await cache.load()
+        if !snap.messages.isEmpty {
+            messages = snap.messages
+            reactionRecords = snap.reactions
+            rebuildAvatarCache(from: messages)
+            rebuildReactions()
+            hasLoadedInitial = true
+        }
+
+        // Replay any pending sends that survived a relaunch.
+        let pending = await queue.snapshot()
+        for item in pending {
+            let optimistic = ChatMessage(
+                id: item.id,
+                userId: item.userId,
+                displayName: item.displayName,
+                content: item.content,
+                avatarUrl: avatarURLByUserId[item.userId.lowercased()],
+                messageType: item.photoStoragePath == nil ? "text" : "photo",
+                attachmentPath: item.photoStoragePath,
+                createdAt: item.createdAt
+            )
+            if !messages.contains(where: { $0.id == item.id }) {
+                messages.append(optimistic)
+            }
+            deliveryStateById[item.id] = item.attemptCount >= 5
+                ? .failed(reason: item.lastError ?? "Failed to send")
+                : .pending
+        }
+        await queue.scheduleDrain()
+
+        // Realtime channels in parallel — each takes ~500ms-2s to confirm.
+        async let realtime: () = subscribeAll()
+
+        // Network reconcile in the background — UI is already painted from disk.
+        Task { [weak self] in
+            await self?.fetchMessages()
+        }
+        _ = await realtime
+
+        isBootstrapped = true
+        bootstrappedUserId = uid
+    }
+
+    /// Tears down realtime + clears in-memory state. Called on sign-out.
+    func shutdown() async {
+        typingExpiryTask?.cancel()
+        typingExpiryTask = nil
+        typingUsers = []
+        typingExpirations = [:]
+        presenceUserIds = []
+
+        await messageChannel?.unsubscribe()
+        await reactionChannel?.unsubscribe()
+        await typingChannel?.unsubscribe()
+        await ownProfileChannel?.unsubscribe()
+        messageChannel = nil
+        reactionChannel = nil
+        typingChannel = nil
+        ownProfileChannel = nil
+
+        messages = []
+        reactionRecords = []
+        reactionsByMessage = [:]
+        avatarURLByUserId = [:]
+        deliveryStateById = [:]
+        hasLoadedInitial = false
+        hasMoreOlderMessages = false
+        isBootstrapped = false
+        bootstrappedUserId = nil
+
+        outboundQueue = nil
+        diskCache = nil
+    }
+
+    // MARK: - Fetch / reconcile
+
+    func fetchMessages() async {
         do {
-            // Load the most recent page only. Older rows are paged in on
-            // demand by loadOlderMessages() when the user scrolls to the top.
-            // Without this cap the cold-start query scaled linearly with
-            // the room's lifetime history.
             let latest: [ChatMessage] = try await supabase
                 .from("messages_with_profiles")
                 .select()
@@ -49,20 +190,23 @@ final class ChatService: ObservableObject {
                 .execute()
                 .value
 
-            messages = latest.reversed()
-            hasMoreOlderMessages = latest.count == Self.pageSize
+            let server = Array(latest.reversed())
+            mergeRemoteMessages(server)
+            // Only flip the "has more" gate based on the server result the
+            // first time — if disk had older rows, we still have more to
+            // page even when the server returned fewer than pageSize.
+            hasMoreOlderMessages = latest.count == Self.pageSize || messages.count > server.count
             rebuildAvatarCache(from: messages)
 
-            // Fetch reactions only for the messages we have on screen.
-            // Older pages bring their own reactions when loaded.
             try await fetchReactions(forMessageIds: messages.map(\.id))
+            hasLoadedInitial = true
+            persistToDisk()
         } catch {
-            throw AppError.networkError(error.localizedDescription)
+            // If disk had something, the UI is still painted — silent.
+            if !hasLoadedInitial { hasLoadedInitial = true }
         }
     }
 
-    /// Pages in the next batch of older messages above the current head.
-    /// Returns the number of new rows prepended; 0 means we hit the top.
     @discardableResult
     func loadOlderMessages() async -> Int {
         guard !isLoadingOlder, hasMoreOlderMessages else { return 0 }
@@ -81,7 +225,7 @@ final class ChatService: ObservableObject {
                 .execute()
                 .value
 
-            let prepend = older.reversed()
+            let prepend = Array(older.reversed())
             let existingIds = Set(messages.map(\.id))
             let deduped = prepend.filter { !existingIds.contains($0.id) }
             messages.insert(contentsOf: deduped, at: 0)
@@ -91,17 +235,17 @@ final class ChatService: ObservableObject {
             if !deduped.isEmpty {
                 try? await fetchReactions(forMessageIds: deduped.map(\.id), merge: true)
             }
+            persistToDisk()
             return deduped.count
         } catch {
             return 0
         }
     }
 
-    /// Reconciles local state with the server after a possible realtime gap
-    /// (e.g., the app was backgrounded or the channel briefly dropped).
-    /// Fetches any messages newer than the last one we've seen and merges
-    /// without disturbing existing rows. Reactions are re-pulled wholesale
-    /// since they're cheap and INSERT/DELETE deltas are easy to miss.
+    /// Re-pull messages newer than our last-seen, plus refresh reactions for
+    /// every message currently on screen — reaction insert/delete events can
+    /// be missed during backgrounding and pure id-diff merge doesn't catch
+    /// emoji churn.
     func refetchSinceLastSeen() async {
         do {
             let cutoff = messages.last?.createdAt
@@ -112,21 +256,36 @@ final class ChatService: ObservableObject {
                 .execute()
                 .value
 
-            var seenIds = Set(messages.map(\.id))
-            for msg in newer where !seenIds.contains(msg.id) {
-                messages.append(msg)
-                seenIds.insert(msg.id)
-            }
+            mergeRemoteMessages(newer)
             rebuildAvatarCache(from: messages)
 
             try await fetchReactions(forMessageIds: messages.map(\.id))
+            persistToDisk()
         } catch {
-            // Silent: foreground reconciliation is best-effort. Realtime
-            // will continue to deliver new messages on the next insert.
+            // best-effort
         }
     }
 
-    /// Avatar for UI: prefer row from view, then cache from last fetch, then current user's loaded profile (realtime rows omit `avatar_url`).
+    /// Union-merges server rows into the existing in-memory list. Server wins
+    /// for overlapping ids (profile data on the row — display name, avatar —
+    /// can change). Older disk rows stay in place; pending optimistic rows
+    /// with local- ids stay because the server can't return them.
+    private func mergeRemoteMessages(_ remote: [ChatMessage]) {
+        var byId: [String: ChatMessage] = Dictionary(uniqueKeysWithValues: messages.map { ($0.id, $0) })
+        for m in remote { byId[m.id] = m }
+        messages = byId.values.sorted { $0.createdAt < $1.createdAt }
+        trimInMemoryIfNeeded()
+    }
+
+    private func trimInMemoryIfNeeded() {
+        guard messages.count > Self.inMemoryCap else { return }
+        let overflow = messages.count - Self.inMemoryCap
+        messages.removeFirst(overflow)
+        hasMoreOlderMessages = true
+    }
+
+    // MARK: - Avatars
+
     func effectiveAvatarURL(for message: ChatMessage, currentUserId: String?, currentUserProfileAvatar: String?) -> String? {
         if let u = message.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !u.isEmpty {
             return u
@@ -151,93 +310,122 @@ final class ChatService: ObservableObject {
         avatarURLByUserId = next
     }
 
+    // MARK: - Send
+
     func sendMessage(content: String, photoData: Data? = nil) async throws {
+        guard let queue = outboundQueue else { throw AppError.unauthorized }
         let user = try await currentUser()
-        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Lowercased to match the storage RLS check `auth.uid()::text =
-        // (storage.foldername(name))[1]` — auth.uid() emits a lowercase
-        // UUID and Swift's uuidString is uppercase, so the upload was
-        // rejected with a row-policy violation until normalized.
-        let attachmentPath = try await uploadPhotoIfNeeded(photoData, userId: user.id.uuidString.lowercased())
-        let messageType = attachmentPath == nil ? "text" : "photo"
-
-        guard !trimmedContent.isEmpty || attachmentPath != nil else { return }
-
-        struct NewMessage: Encodable {
-            let userId: String
-            let displayName: String
-            let content: String
-            let messageType: String
-            let attachmentPath: String?
-
-            enum CodingKeys: String, CodingKey {
-                case userId = "user_id"
-                case displayName = "display_name"
-                case content
-                case messageType = "message_type"
-                case attachmentPath = "attachment_path"
-            }
-        }
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty || photoData != nil else { return }
 
         let displayName = user.userMetadata["display_name"]?.stringValue ?? "Anonymous"
         let userIdString = user.id.uuidString.lowercased()
 
-        // Optimistic append: show the user's own message immediately so it
-        // doesn't depend on the realtime echo (which can be delayed or, per
-        // load testing, dropped ~5% of the time). After the server insert
-        // returns, swap the temp id for the real one so the realtime echo's
-        // dedup hits and we don't end up with two rows.
-        let tempId = "local-\(UUID().uuidString)"
-        let nowIso = ISO8601DateFormatter().string(from: Date())
+        let result: ChatOutboundQueue.EnqueueResult
+        let messageType: String
+        if let photoData {
+            result = await queue.enqueuePhoto(
+                userId: userIdString,
+                displayName: displayName,
+                content: trimmed,
+                photoData: photoData
+            )
+            messageType = "photo"
+        } else {
+            result = await queue.enqueueText(
+                userId: userIdString,
+                displayName: displayName,
+                content: trimmed
+            )
+            messageType = "text"
+        }
+
         let optimistic = ChatMessage(
-            id: tempId,
+            id: result.id,
             userId: userIdString,
             displayName: displayName,
-            content: trimmedContent,
+            content: trimmed,
             avatarUrl: avatarURLByUserId[userIdString],
             messageType: messageType,
-            attachmentPath: attachmentPath,
-            createdAt: nowIso
+            attachmentPath: nil,
+            createdAt: result.createdAt
         )
         messages.append(optimistic)
+        deliveryStateById[result.id] = .pending
+        persistToDisk()
+    }
 
-        struct InsertedRow: Decodable {
-            let id: String
+    /// Queue callback: row landed on the server. Swap the temp row for one
+    /// keyed by the server id so realtime echoes dedup against it.
+    func outboundDidSucceed(tempId: String, serverId: String) {
+        ownPendingMessageIds.insert(serverId)
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            self?.ownPendingMessageIds.remove(serverId)
         }
 
-        do {
-            let inserted: InsertedRow = try await supabase
-                .from("messages")
-                .insert(NewMessage(
-                    userId: userIdString,
-                    displayName: displayName,
-                    content: trimmedContent,
-                    messageType: messageType,
-                    attachmentPath: attachmentPath
-                ))
-                .select("id")
-                .single()
-                .execute()
-                .value
-
-            if let idx = messages.firstIndex(where: { $0.id == tempId }) {
-                let prev = messages[idx]
-                messages[idx] = ChatMessage(
-                    id: inserted.id,
-                    userId: prev.userId,
-                    displayName: prev.displayName,
-                    content: prev.content,
-                    avatarUrl: prev.avatarUrl,
-                    messageType: prev.messageType,
-                    attachmentPath: prev.attachmentPath,
-                    createdAt: prev.createdAt
-                )
-            }
-        } catch {
-            // Roll back the optimistic row so the user sees the failure.
+        // If the realtime echo beat us to the punch, the server row is
+        // already present. Drop the temp row and let the echo stand.
+        if let serverIdx = messages.firstIndex(where: { $0.id == serverId }) {
+            // Mark sent.
+            deliveryStateById[tempId] = nil
             messages.removeAll { $0.id == tempId }
-            throw AppError.networkError(error.localizedDescription)
+            // Hydrate avatar if missing on the echo row.
+            let echoRow = messages[serverIdx]
+            if (echoRow.avatarUrl ?? "").isEmpty {
+                Task { [weak self] in await self?.hydrateMessageFromView(id: serverId) }
+            }
+            persistToDisk()
+            return
         }
+
+        if let idx = messages.firstIndex(where: { $0.id == tempId }) {
+            let prev = messages[idx]
+            messages[idx] = ChatMessage(
+                id: serverId,
+                userId: prev.userId,
+                displayName: prev.displayName,
+                content: prev.content,
+                avatarUrl: prev.avatarUrl,
+                messageType: prev.messageType,
+                attachmentPath: prev.attachmentPath,
+                createdAt: prev.createdAt
+            )
+            deliveryStateById[tempId] = nil
+            deliveryStateById[serverId] = .sent
+        }
+        persistToDisk()
+    }
+
+    /// Queue callback: send attempt failed. Either retrying or final failure.
+    func outboundDidUpdate(item: ChatOutboundQueue.PendingItem, isFinalFailure: Bool) {
+        if isFinalFailure {
+            deliveryStateById[item.id] = .failed(reason: item.lastError ?? "Failed to send")
+        } else {
+            deliveryStateById[item.id] = .pending
+        }
+    }
+
+    /// Queue callback: user (or app) cancelled a pending send.
+    func outboundDidCancel(tempId: String) {
+        messages.removeAll { $0.id == tempId }
+        deliveryStateById[tempId] = nil
+        persistToDisk()
+    }
+
+    func retryFailedMessage(id: String) {
+        guard let queue = outboundQueue else { return }
+        deliveryStateById[id] = .pending
+        Task { await queue.retry(id: id) }
+    }
+
+    func cancelFailedMessage(id: String) {
+        guard let queue = outboundQueue else { return }
+        Task { await queue.cancel(id: id) }
+    }
+
+    func deliveryState(for messageId: String) -> MessageDeliveryState {
+        deliveryStateById[messageId] ?? .sent
     }
 
     func publicURL(for attachmentPath: String?) -> URL? {
@@ -245,27 +433,52 @@ final class ChatService: ObservableObject {
         return try? supabase.storage.from(chatBucket).getPublicURL(path: attachmentPath)
     }
 
+    // MARK: - Reactions
+
     func toggleReaction(messageId: String, emoji: String) async throws {
         let user = try await currentUser()
-        // Postgres canonicalizes UUIDs to lowercase; Swift's uuidString is
-        // uppercase. Mismatch made the local "does this reaction exist?"
-        // lookup miss, so a second tap re-INSERTed and the unique index
-        // (message_id, user_id, emoji) bounced it as a duplicate.
         let userIdString = user.id.uuidString.lowercased()
 
         if let existing = reactionRecords.first(where: {
             $0.messageId == messageId && $0.userId == userIdString && $0.emoji == emoji
         }) {
+            // Optimistic remove.
+            ownPendingReactionDeleteIds.insert(existing.id)
+            reactionRecords.removeAll { $0.id == existing.id }
+            rebuildReactions()
+
             do {
                 try await supabase
                     .from("message_reactions")
                     .delete()
                     .eq("id", value: existing.id)
                     .execute()
+                Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(10))
+                    self?.ownPendingReactionDeleteIds.remove(existing.id)
+                }
             } catch {
+                // Rollback.
+                ownPendingReactionDeleteIds.remove(existing.id)
+                if !reactionRecords.contains(where: { $0.id == existing.id }) {
+                    reactionRecords.append(existing)
+                    rebuildReactions()
+                }
                 throw AppError.networkError(error.localizedDescription)
             }
         } else {
+            let tempId = "local-r-\(UUID().uuidString)"
+            let now = ISO8601DateFormatter().string(from: Date())
+            let optimistic = MessageReactionRecord(
+                id: tempId,
+                messageId: messageId,
+                userId: userIdString,
+                emoji: emoji,
+                createdAt: now
+            )
+            reactionRecords.append(optimistic)
+            rebuildReactions()
+
             struct NewReaction: Encodable {
                 let messageId: String
                 let userId: String
@@ -279,15 +492,30 @@ final class ChatService: ObservableObject {
             }
 
             do {
-                try await supabase
+                let inserted: MessageReactionRecord = try await supabase
                     .from("message_reactions")
                     .insert(NewReaction(
                         messageId: messageId,
                         userId: userIdString,
                         emoji: emoji
                     ))
+                    .select()
+                    .single()
                     .execute()
+                    .value
+
+                ownPendingReactionInsertIds.insert(inserted.id)
+                Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(10))
+                    self?.ownPendingReactionInsertIds.remove(inserted.id)
+                }
+                if let idx = reactionRecords.firstIndex(where: { $0.id == tempId }) {
+                    reactionRecords[idx] = inserted
+                }
+                rebuildReactions()
             } catch {
+                reactionRecords.removeAll { $0.id == tempId }
+                rebuildReactions()
                 throw AppError.networkError(error.localizedDescription)
             }
         }
@@ -297,29 +525,56 @@ final class ChatService: ObservableObject {
         guard let currentUserId,
               let reaction = reactionsByMessage[messageId]?.first(where: { $0.emoji == emoji })
         else { return false }
-
         return reaction.userIds.contains(currentUserId)
     }
 
-    /// Sets up all three realtime channels and awaits each channel's initial
-    /// subscription. Broadcasting (used for the typing indicator) only works
-    /// once the channel is subscribed — firing-and-forgetting the subscribe
-    /// lost early keystrokes. Subscribes run in parallel: each channel takes
-    /// ~500ms-2s to confirm, so doing them concurrently cuts cold-start time
-    /// roughly 3x.
-    func subscribeToMessages() async {
-        async let messages: () = subscribeToMessageInserts()
-        async let reactions: () = subscribeToReactionChanges()
-        async let typing: () = subscribeToTypingPresence()
-        async let ownProfile: () = subscribeToOwnProfile()
-        _ = await (messages, reactions, typing, ownProfile)
+    private func fetchReactions(forMessageIds ids: [String]? = nil, merge: Bool = false) async throws {
+        var query = supabase.from("message_reactions").select()
+        if let ids, !ids.isEmpty {
+            query = query.in("message_id", values: ids)
+        }
+        let rows: [MessageReactionRecord] = try await query
+            .order("created_at", ascending: true)
+            .execute()
+            .value
+
+        if merge {
+            let existingIds = Set(reactionRecords.map(\.id))
+            for row in rows where !existingIds.contains(row.id) {
+                reactionRecords.append(row)
+            }
+        } else {
+            // Preserve optimistic rows that the server hasn't echoed yet.
+            let optimistic = reactionRecords.filter { $0.id.hasPrefix("local-r-") }
+            reactionRecords = rows + optimistic
+        }
+        rebuildReactions()
     }
 
+    private func rebuildReactions() {
+        let groupedByMessage = Dictionary(grouping: reactionRecords, by: \.messageId)
+        reactionsByMessage = groupedByMessage.mapValues { rows in
+            Dictionary(grouping: rows, by: \.emoji)
+                .map { emoji, emojiRows in
+                    MessageReaction(
+                        messageId: emojiRows.first?.messageId ?? "",
+                        emoji: emoji,
+                        count: emojiRows.count,
+                        userIds: Set(emojiRows.map(\.userId))
+                    )
+                }
+                .sorted { lhs, rhs in
+                    if lhs.count == rhs.count { return lhs.emoji < rhs.emoji }
+                    return lhs.count > rhs.count
+                }
+        }
+    }
+
+    // MARK: - Typing (presence + broadcast belt-and-suspenders)
+
     func setTyping(isTyping: Bool) {
-        // Throttle: receiver's typing window is 4s, so re-emitting "typing"
-        // every ~2s is enough to keep the indicator alive without flooding
-        // the channel on every keystroke. Always emit immediately when the
-        // state flips so transitions (idle→typing, typing→idle) feel instant.
+        // Throttle — receiver's typing window is 4s. Always emit immediately
+        // on state flips so transitions feel instant.
         let now = Date()
         let stateChanged = lastTypingEmittedState != isTyping
         if !stateChanged,
@@ -342,25 +597,6 @@ final class ChatService: ObservableObject {
         }
     }
 
-    func unsubscribe() async {
-        // Await teardown so a quick navigate-away + return doesn't race a new
-        // subscribe against the previous channel still being torn down. That
-        // race leaked channels and could double-deliver inserts/reactions.
-        typingExpiryTask?.cancel()
-        typingExpiryTask = nil
-        typingUsers = []
-        typingExpirations = [:]
-
-        await messageChannel?.unsubscribe()
-        await reactionChannel?.unsubscribe()
-        await typingChannel?.unsubscribe()
-        await ownProfileChannel?.unsubscribe()
-        messageChannel = nil
-        reactionChannel = nil
-        typingChannel = nil
-        ownProfileChannel = nil
-    }
-
     // MARK: - Mute
 
     func toggleMute(userId: String, muted: Bool) async throws {
@@ -371,10 +607,6 @@ final class ChatService: ObservableObject {
             .execute()
     }
 
-    /// Returns the user's mute state, or `nil` on error so callers can
-    /// preserve the last-known value rather than flipping a muted user to
-    /// un-muted on a transient fetch failure. (The DB/RLS still blocks the
-    /// send either way, but the UX shouldn't lie.)
     func checkMuteStatus() async -> Bool? {
         guard let uid = await currentUserId else { return nil }
         do {
@@ -398,9 +630,6 @@ final class ChatService: ObservableObject {
         let channel = supabase.realtimeV2.channel("own-profile-\(uid)")
         ownProfileChannel = channel
 
-        // Filter to just our row so admin mute toggles on this user land
-        // here immediately. profiles is in the realtime publication and
-        // SELECT RLS is open, so the row is broadcast to the row owner.
         let updates = channel.postgresChange(
             UpdateAction.self,
             schema: "public",
@@ -437,7 +666,6 @@ final class ChatService: ObservableObject {
         }
     }
 
-
     func fetchProfile(userId: String) async throws -> UserProfile {
         do {
             return try await supabase
@@ -464,64 +692,14 @@ final class ChatService: ObservableObject {
         }
     }
 
-    private func uploadPhotoIfNeeded(_ photoData: Data?, userId: String) async throws -> String? {
-        guard let photoData else { return nil }
+    // MARK: - Realtime subscriptions
 
-        let filePath = "\(userId)/\(UUID().uuidString).jpg"
-
-        do {
-            _ = try await supabase.storage
-                .from(chatBucket)
-                .upload(filePath, data: photoData, options: FileOptions(contentType: "image/jpeg", upsert: false))
-            return filePath
-        } catch {
-            throw AppError.networkError("Photo upload failed: \(error.localizedDescription)")
-        }
-    }
-
-    /// Loads reactions, optionally scoped to a set of message ids. When
-    /// `merge` is true the new rows are unioned with the existing ones
-    /// (used when paging in older messages); otherwise they replace.
-    private func fetchReactions(forMessageIds ids: [String]? = nil, merge: Bool = false) async throws {
-        var query = supabase.from("message_reactions").select()
-        if let ids, !ids.isEmpty {
-            query = query.in("message_id", values: ids)
-        }
-        let rows: [MessageReactionRecord] = try await query
-            .order("created_at", ascending: true)
-            .execute()
-            .value
-
-        if merge {
-            let existingIds = Set(reactionRecords.map(\.id))
-            for row in rows where !existingIds.contains(row.id) {
-                reactionRecords.append(row)
-            }
-        } else {
-            reactionRecords = rows
-        }
-        rebuildReactions()
-    }
-
-    private func rebuildReactions() {
-        let groupedByMessage = Dictionary(grouping: reactionRecords, by: \.messageId)
-        reactionsByMessage = groupedByMessage.mapValues { rows in
-            Dictionary(grouping: rows, by: \.emoji)
-                .map { emoji, emojiRows in
-                    MessageReaction(
-                        messageId: emojiRows.first?.messageId ?? "",
-                        emoji: emoji,
-                        count: emojiRows.count,
-                        userIds: Set(emojiRows.map(\.userId))
-                    )
-                }
-                .sorted { lhs, rhs in
-                    if lhs.count == rhs.count {
-                        return lhs.emoji < rhs.emoji
-                    }
-                    return lhs.count > rhs.count
-                }
-        }
+    private func subscribeAll() async {
+        async let m: () = subscribeToMessageInserts()
+        async let r: () = subscribeToReactionChanges()
+        async let t: () = subscribeToTypingPresence()
+        async let p: () = subscribeToOwnProfile()
+        _ = await (m, r, t, p)
     }
 
     private func subscribeToMessageInserts() async {
@@ -534,17 +712,12 @@ final class ChatService: ObservableObject {
             for await insert in insertions {
                 guard let self else { return }
                 guard let raw = try? insert.decodeRecord(as: ChatMessage.self, decoder: jsonDecoder),
-                      !self.messages.contains(where: { $0.id == raw.id }) else { continue }
+                      !self.messages.contains(where: { $0.id == raw.id }),
+                      !self.ownPendingMessageIds.contains(raw.id) else { continue }
 
-                // Append the raw row immediately so the bubble appears without delay.
                 self.messages.append(raw)
+                self.persistToDisk()
 
-                // Realtime INSERT events don't include avatar_url (it's on the
-                // profiles table). Only re-fetch through messages_with_profiles
-                // when we don't already have this user's avatar cached —
-                // otherwise effectiveAvatarURL falls back to the cache and the
-                // single-row hydrate query is wasted work. Saves an N×N query
-                // storm during chat bursts at game-night scale.
                 let cached = (avatarURLByUserId[raw.userId.lowercased()] ?? "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if cached.isEmpty {
@@ -562,10 +735,6 @@ final class ChatService: ObservableObject {
         }
     }
 
-    /// Realtime INSERT events on `messages` don't carry avatar_url (it was
-    /// moved to the profiles table in migration 003). Re-query the single
-    /// row through `messages_with_profiles` to get the joined profile data,
-    /// then swap the enriched version into the messages array.
     private func hydrateMessageFromView(id: String) async {
         do {
             let enriched: ChatMessage = try await supabase
@@ -583,8 +752,9 @@ final class ChatService: ObservableObject {
                !url.isEmpty {
                 avatarURLByUserId[enriched.userId.lowercased()] = url
             }
+            persistToDisk()
         } catch {
-            // Keep the raw row — AvatarView falls back to initials.
+            // Falls back to initials in AvatarView.
         }
     }
 
@@ -599,9 +769,11 @@ final class ChatService: ObservableObject {
             for await insert in insertions {
                 guard let self else { return }
                 guard let inserted = try? insert.decodeRecord(as: MessageReactionRecord.self, decoder: jsonDecoder) else { continue }
+                if self.ownPendingReactionInsertIds.contains(inserted.id) { continue }
                 if !self.reactionRecords.contains(where: { $0.id == inserted.id }) {
                     self.reactionRecords.append(inserted)
                     self.rebuildReactions()
+                    self.persistToDisk()
                 }
             }
         }
@@ -610,8 +782,10 @@ final class ChatService: ObservableObject {
             for await delete in deletions {
                 guard let self else { return }
                 guard let deleted = try? delete.decodeOldRecord(as: MessageReactionRecord.self, decoder: jsonDecoder) else { continue }
+                if self.ownPendingReactionDeleteIds.contains(deleted.id) { continue }
                 self.reactionRecords.removeAll { $0.id == deleted.id }
                 self.rebuildReactions()
+                self.persistToDisk()
             }
         }
 
@@ -631,8 +805,6 @@ final class ChatService: ObservableObject {
         Task { [weak self] in
             for await event in typingEvents {
                 guard let self else { return }
-                // broadcastStream yields the full broadcast envelope; the
-                // message we sent lives under the "payload" key.
                 guard let payload = event["payload"]?.objectValue,
                       let userId = payload["user_id"]?.stringValue,
                       let displayName = payload["display_name"]?.stringValue,
@@ -683,6 +855,16 @@ final class ChatService: ObservableObject {
         guard !expiredIds.isEmpty else { return }
         expiredIds.forEach { typingExpirations[$0] = nil }
         typingUsers.removeAll { expiredIds.contains($0.id) }
+    }
+
+    // MARK: - Disk persistence
+
+    private func persistToDisk() {
+        guard let diskCache else { return }
+        let sentMessages = messages.filter { (deliveryStateById[$0.id] ?? .sent) == .sent }
+        let snapshot = sentMessages
+        let reactions = reactionRecords.filter { !$0.id.hasPrefix("local-r-") }
+        Task { await diskCache.save(messages: snapshot, reactions: reactions) }
     }
 
     // MARK: - Gallery

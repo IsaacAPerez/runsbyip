@@ -40,6 +40,7 @@
 		96E1CBFBDE600DBFE1FA7059 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35D1619C42A8901D6962DD69 /* HomeView.swift */; };
 		97939F9A151BAD6FC721922C /* NavigationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 570BF1DA145943B9D2B53AA7 /* NavigationCoordinator.swift */; };
 		9A50CEBC4D85494C871BE468 /* SessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC20AC94D20854C0B1609FF /* SessionService.swift */; };
+		A4D91AF64813683C169A206B /* ChatDiskCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85639DE014630B911C7DC1CE /* ChatDiskCache.swift */; };
 		A741B5E8E852306D9E6A3BBE /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4EF9200262867E62FD9389F /* AvatarView.swift */; };
 		A9AFE656422F7E0C7D90830D /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D11581A4829F366CD4FC78DA /* SplashView.swift */; };
 		B279C307C71F168248FDE012 /* PaymentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3125BABB939048E525C4B23 /* PaymentService.swift */; };
@@ -59,11 +60,13 @@
 		E1EB7A96F0E82EF71E10B8C9 /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF6867E096B4E714E204394 /* SupabaseService.swift */; };
 		EB49CC744E95ABCFE4E7E920 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A21B7B63E4F81170C5B2BF1 /* AuthService.swift */; };
 		F36E80DC116D4C3AE9C3AB3B /* StripeApplePay in Frameworks */ = {isa = PBXBuildFile; productRef = 49844877ABB399B3A3AB67DE /* StripeApplePay */; };
+		FC131E004C2237596B13A3EE /* ChatOutboundQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12421C78E61976BC294ECB1E /* ChatOutboundQueue.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		0BABCCC409865CB8C3F88C86 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		115356677835FDBFB28A9EFC /* LoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
+		12421C78E61976BC294ECB1E /* ChatOutboundQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatOutboundQueue.swift; sourceTree = "<group>"; };
 		184BE1D7A646185980C24A37 /* POWService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = POWService.swift; sourceTree = "<group>"; };
 		1959B9DD9898C2D0992E4C32 /* View+Loading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Loading.swift"; sourceTree = "<group>"; };
 		24CC3B759134E70C3D9D82BD /* Color+App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+App.swift"; sourceTree = "<group>"; };
@@ -86,6 +89,7 @@
 		7A21B7B63E4F81170C5B2BF1 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		7CC20AC94D20854C0B1609FF /* SessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionService.swift; sourceTree = "<group>"; };
 		838386B173F360CAF3CC7CAA /* Date+Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Formatting.swift"; sourceTree = "<group>"; };
+		85639DE014630B911C7DC1CE /* ChatDiskCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDiskCache.swift; sourceTree = "<group>"; };
 		8AA9BBCC60CC667796CD7259 /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
 		971EA2DE800BBBAEE983057A /* BadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeView.swift; sourceTree = "<group>"; };
 		9C610DD78757AB371ABEEA52 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
@@ -249,6 +253,8 @@
 			children = (
 				D9697A95CCC7A9625C16E0BE /* AppConfigService.swift */,
 				7A21B7B63E4F81170C5B2BF1 /* AuthService.swift */,
+				85639DE014630B911C7DC1CE /* ChatDiskCache.swift */,
+				12421C78E61976BC294ECB1E /* ChatOutboundQueue.swift */,
 				F540197A7CD9C9C6924402CD /* ChatService.swift */,
 				9D3B1BAFA39E2FB41AB9AEA7 /* ChatWriteGate.swift */,
 				42099E3A4BBB61724D08607A /* NotificationService.swift */,
@@ -404,6 +410,8 @@
 				EB49CC744E95ABCFE4E7E920 /* AuthService.swift in Sources */,
 				A741B5E8E852306D9E6A3BBE /* AvatarView.swift in Sources */,
 				3544D7295365EC6E7912BF36 /* BadgeView.swift in Sources */,
+				A4D91AF64813683C169A206B /* ChatDiskCache.swift in Sources */,
+				FC131E004C2237596B13A3EE /* ChatOutboundQueue.swift in Sources */,
 				CA858B8532BA5CEE9DD17F7F /* ChatService.swift in Sources */,
 				9334B0CEE14B7216B13CF512 /* ChatView.swift in Sources */,
 				CA055442E62B93A2F62A7BE7 /* ChatWriteGate.swift in Sources */,
@@ -540,7 +548,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -600,7 +608,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

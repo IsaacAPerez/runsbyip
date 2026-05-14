@@ -20,9 +20,14 @@ struct ChatView: View {
     @State private var selectedPhotoData: Data?
     @State private var typingResetTask: Task<Void, Never>?
     @State private var showMembers = false
-    @State private var isPinnedToBottom: Bool = true
+    /// Ids of message cells currently on screen. Used to compute "pinned near
+    /// bottom" without requiring the very last cell to be visible — being one
+    /// or two rows up from the floor still counts.
+    @State private var visibleMessageIds: Set<String> = []
     @State private var isLoadingOlder: Bool = false
     @State private var didInitialScroll: Bool = false
+    @State private var unreadIncomingCount: Int = 0
+    private static let pinnedBottomLookback: Int = 3
 
     private var isMuted: Bool { chatService.currentUserMuted }
 
@@ -86,7 +91,6 @@ struct ChatView: View {
                                     }
 
                                     ForEach(Array(chatService.messages.enumerated()), id: \.element.id) { index, message in
-                                        let isLast = index == chatService.messages.count - 1
                                         MessageBubbleView(
                                             message: message,
                                             isCurrentUser: message.userId == currentUserId,
@@ -106,21 +110,24 @@ struct ChatView: View {
                                             onReact: { emoji in
                                                 react(to: message.id, emoji: emoji)
                                             },
-                                            reactionsAllowed: canUseChatWrites
+                                            reactionsAllowed: canUseChatWrites,
+                                            deliveryState: chatService.deliveryState(for: message.id),
+                                            onRetry: { chatService.retryFailedMessage(id: message.id) },
+                                            onCancelFailed: { chatService.cancelFailedMessage(id: message.id) }
                                         )
                                         .id(message.id)
                                         .onAppear {
-                                            if isLast { isPinnedToBottom = true }
+                                            visibleMessageIds.insert(message.id)
                                         }
                                         .onDisappear {
-                                            if isLast { isPinnedToBottom = false }
+                                            visibleMessageIds.remove(message.id)
                                         }
                                     }
                                 }
                                 .padding(.vertical, 14)
                             }
                             .scrollDismissesKeyboard(.interactively)
-                            .onChange(of: chatService.messages.count) { _, newCount in
+                            .onChange(of: chatService.messages.count) { oldCount, newCount in
                                 // First time messages populate, stagger a few
                                 // scrolls — LazyVStack hasn't laid out the
                                 // bottom cells yet on the first pass, and
@@ -131,12 +138,25 @@ struct ChatView: View {
                                     settleInitialScroll(proxy: proxy)
                                     return
                                 }
-                                // Only yank the user to the bottom on new
-                                // messages if they were already pinned there.
-                                // Otherwise scrolling up to read history gets
-                                // hijacked on every realtime insert.
-                                if isPinnedToBottom {
+                                guard newCount > oldCount else { return }
+
+                                // Auto-scroll when the user was looking at
+                                // the tail of the chat (any of the last 3
+                                // bubbles visible). Also always scroll when
+                                // the new last row is ours — sending should
+                                // always pull the view to the bottom.
+                                let msgs = chatService.messages
+                                let wasNearBottom = msgs.dropLast()
+                                    .suffix(Self.pinnedBottomLookback)
+                                    .contains { visibleMessageIds.contains($0.id) }
+                                let newLastIsOurs = msgs.last?.userId == currentUserId
+                                if wasNearBottom || newLastIsOurs {
                                     scrollToBottom(proxy: proxy)
+                                    unreadIncomingCount = 0
+                                } else {
+                                    // Reading history — surface the new-message
+                                    // pill instead of hijacking scroll.
+                                    unreadIncomingCount += (newCount - oldCount)
                                 }
                             }
                             .onAppear {
@@ -148,10 +168,37 @@ struct ChatView: View {
                             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
                                 // Pin to the latest message when the keyboard
                                 // comes up so the composer never covers it.
-                                if isPinnedToBottom {
+                                let msgs = chatService.messages
+                                let nearBottom = msgs
+                                    .suffix(Self.pinnedBottomLookback)
+                                    .contains { visibleMessageIds.contains($0.id) }
+                                if nearBottom {
                                     scrollToBottom(proxy: proxy)
                                 }
                             }
+                            .onChange(of: visibleMessageIds) { _, _ in
+                                // Clear the new-message pill once the user
+                                // has scrolled back into the live tail.
+                                guard unreadIncomingCount > 0 else { return }
+                                let msgs = chatService.messages
+                                let nearBottom = msgs
+                                    .suffix(Self.pinnedBottomLookback)
+                                    .contains { visibleMessageIds.contains($0.id) }
+                                if nearBottom {
+                                    unreadIncomingCount = 0
+                                }
+                            }
+                            .overlay(alignment: .bottom) {
+                                if unreadIncomingCount > 0 {
+                                    NewMessagesPill(count: unreadIncomingCount) {
+                                        scrollToBottom(proxy: proxy)
+                                        unreadIncomingCount = 0
+                                    }
+                                    .padding(.bottom, 12)
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                                }
+                            }
+                            .animation(.easeOut(duration: 0.2), value: unreadIncomingCount)
                         }
                     }
 
@@ -330,9 +377,10 @@ struct ChatView: View {
                 Task { await chatService.refetchSinceLastSeen() }
             }
             .onDisappear {
+                // Channels stay subscribed across tab switches — only the
+                // composer's typing-reset task is local to this view.
                 typingResetTask?.cancel()
                 chatService.setTyping(isTyping: false)
-                Task { await chatService.unsubscribe() }
             }
             .onChange(of: selectedPhotoItem) { _, newValue in
                 Task {
@@ -360,26 +408,22 @@ struct ChatView: View {
     }
 
     private func loadChat() async {
-        // Render as soon as the fetch + auth lookups resolve. Realtime
-        // subscribes run detached: the Supabase tenant cold-starts (replication
-        // slot, publication validation, WAL stream) on first connect after
-        // inactivity, which can take seconds or hang outright. Gating the
-        // spinner on that produced infinite "Loading chat..." in the sim.
-        // The insert handler dedupes by id, so any messages that land while
-        // subscribes are still warming up are caught by refetchSinceLastSeen
-        // on the next foregrounding.
+        // bootstrap() is idempotent — it paints from disk immediately on the
+        // first call, kicks off realtime subscriptions for the whole session,
+        // and on subsequent calls just reconciles since-last-seen. The
+        // singleton-at-MainTabView ensures channels stay alive while the user
+        // navigates between tabs.
         async let userIdTask = chatService.currentUserId
         async let muteTask = chatService.checkMuteStatus()
-        Task { await chatService.subscribeToMessages() }
 
-        do {
-            try await chatService.fetchMessages()
-        } catch {
-            errorMessage = error.localizedDescription
+        if !chatService.hasLoadedInitial {
+            await chatService.bootstrap()
+        } else {
+            await chatService.refetchSinceLastSeen()
         }
 
         currentUserId = await userIdTask
-        _ = await muteTask  // checkMuteStatus() publishes to chatService.currentUserMuted
+        _ = await muteTask
         isLoading = false
     }
 
@@ -633,6 +677,32 @@ private struct ChatWriteGatePanel: View {
                 passphrase = ""
             }
         }
+    }
+}
+
+private struct NewMessagesPill: View {
+    let count: Int
+    let onTap: () -> Void
+
+    private var label: String {
+        count == 1 ? "1 new message" : "\(count) new messages"
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down")
+                    .font(.caption.bold())
+                Text(label)
+                    .font(.caption.bold())
+            }
+            .foregroundColor(.black)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Color.appAccentOrange, in: Capsule())
+            .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3)
+        }
+        .buttonStyle(.plain)
     }
 }
 
