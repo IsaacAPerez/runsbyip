@@ -13,10 +13,53 @@ actor ChatOutboundQueue {
         let content: String
         let createdAt: String
         var photoStoragePath: String?
+        /// "text", "photo", or "gif". Drives the storage upload's MIME +
+        /// extension and the `messages.message_type` value.
+        var messageType: String
         var attemptCount: Int
         var lastError: String?
 
-        var isPhoto: Bool { photoStoragePath != nil }
+        var isPhoto: Bool { photoStoragePath != nil && messageType == "photo" }
+        var isGif: Bool { photoStoragePath != nil && messageType == "gif" }
+
+        init(
+            id: String,
+            userId: String,
+            displayName: String,
+            content: String,
+            createdAt: String,
+            photoStoragePath: String?,
+            messageType: String,
+            attemptCount: Int,
+            lastError: String?
+        ) {
+            self.id = id
+            self.userId = userId
+            self.displayName = displayName
+            self.content = content
+            self.createdAt = createdAt
+            self.photoStoragePath = photoStoragePath
+            self.messageType = messageType
+            self.attemptCount = attemptCount
+            self.lastError = lastError
+        }
+
+        // Decode with a fallback so queue files written before this field
+        // existed still load — old text-only sends stay text-only, old
+        // photo sends keep being treated as photos.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            userId = try c.decode(String.self, forKey: .userId)
+            displayName = try c.decode(String.self, forKey: .displayName)
+            content = try c.decode(String.self, forKey: .content)
+            createdAt = try c.decode(String.self, forKey: .createdAt)
+            photoStoragePath = try c.decodeIfPresent(String.self, forKey: .photoStoragePath)
+            attemptCount = try c.decode(Int.self, forKey: .attemptCount)
+            lastError = try c.decodeIfPresent(String.self, forKey: .lastError)
+            messageType = try c.decodeIfPresent(String.self, forKey: .messageType)
+                ?? (photoStoragePath != nil ? "photo" : "text")
+        }
     }
 
     struct EnqueueResult {
@@ -84,6 +127,7 @@ actor ChatOutboundQueue {
             content: content,
             createdAt: createdAt,
             photoStoragePath: nil,
+            messageType: "text",
             attemptCount: 0,
             lastError: nil
         )
@@ -94,9 +138,29 @@ actor ChatOutboundQueue {
     }
 
     func enqueuePhoto(userId: String, displayName: String, content: String, photoData: Data) -> EnqueueResult {
+        return enqueueBinary(
+            userId: userId,
+            displayName: displayName,
+            content: content,
+            data: photoData,
+            messageType: "photo"
+        )
+    }
+
+    func enqueueGif(userId: String, displayName: String, content: String, gifData: Data) -> EnqueueResult {
+        return enqueueBinary(
+            userId: userId,
+            displayName: displayName,
+            content: content,
+            data: gifData,
+            messageType: "gif"
+        )
+    }
+
+    private func enqueueBinary(userId: String, displayName: String, content: String, data: Data, messageType: String) -> EnqueueResult {
         let id = "local-\(UUID().uuidString)"
         let createdAt = ISO8601DateFormatter().string(from: Date())
-        pendingPhotoData[id] = photoData
+        pendingPhotoData[id] = data
         let item = PendingItem(
             id: id,
             userId: userId,
@@ -104,6 +168,7 @@ actor ChatOutboundQueue {
             content: content,
             createdAt: createdAt,
             photoStoragePath: nil,
+            messageType: messageType,
             attemptCount: 0,
             lastError: nil
         )
@@ -192,7 +257,7 @@ actor ChatOutboundQueue {
 
     private func performSend(item: inout PendingItem) async throws -> String {
         if pendingPhotoData[item.id] != nil, item.photoStoragePath == nil {
-            let path = try await uploadPhoto(for: item)
+            let path = try await uploadBinary(for: item)
             item.photoStoragePath = path
             if let idx = persisted.firstIndex(where: { $0.id == item.id }) {
                 persisted[idx].photoStoragePath = path
@@ -200,14 +265,13 @@ actor ChatOutboundQueue {
             }
         }
 
-        let messageType = item.photoStoragePath == nil ? "text" : "photo"
         let inserted: InsertedRow = try await supabase
             .from("messages")
             .insert(NewMessage(
                 userId: item.userId,
                 displayName: item.displayName,
                 content: item.content,
-                messageType: messageType,
+                messageType: item.messageType,
                 attachmentPath: item.photoStoragePath
             ))
             .select("id")
@@ -217,15 +281,23 @@ actor ChatOutboundQueue {
         return inserted.id
     }
 
-    private func uploadPhoto(for item: PendingItem) async throws -> String {
+    private func uploadBinary(for item: PendingItem) async throws -> String {
         guard let data = pendingPhotoData[item.id] else {
-            throw AppError.networkError("Photo data missing for pending send")
+            throw AppError.networkError("Attachment data missing for pending send")
         }
-        let path = "\(item.userId)/\(UUID().uuidString).jpg"
+        let (ext, mime) = mimeAndExtension(for: item.messageType)
+        let path = "\(item.userId)/\(UUID().uuidString).\(ext)"
         _ = try await supabase.storage
             .from("chat-media")
-            .upload(path, data: data, options: FileOptions(contentType: "image/jpeg", upsert: false))
+            .upload(path, data: data, options: FileOptions(contentType: mime, upsert: false))
         return path
+    }
+
+    private func mimeAndExtension(for messageType: String) -> (ext: String, mime: String) {
+        switch messageType {
+        case "gif": return ("gif", "image/gif")
+        default: return ("jpg", "image/jpeg")
+        }
     }
 
     // MARK: - Disk

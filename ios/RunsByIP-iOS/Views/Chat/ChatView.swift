@@ -18,6 +18,10 @@ struct ChatView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var selectedPhotoPreview: UIImage?
     @State private var selectedPhotoData: Data?
+    /// Set when the picked image is a GIF — preserves the original
+    /// animated bytes so we send it as `message_type = 'gif'` instead
+    /// of compressing to a static JPEG.
+    @State private var selectedGifData: Data?
     @State private var typingResetTask: Task<Void, Never>?
     @State private var showMembers = false
     /// Ids of message cells currently on screen. Used to compute "pinned near
@@ -254,10 +258,12 @@ struct ChatView: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text("Photo ready")
+                                        Text(selectedGifData != nil ? "GIF ready" : "Photo ready")
                                             .font(.subheadline.bold())
                                             .foregroundColor(.white)
-                                        Text("Attachments are photo-only for now.")
+                                        Text(selectedGifData != nil
+                                            ? "Animated. Send to share."
+                                            : "Photos and GIFs supported.")
                                             .font(.caption)
                                             .foregroundColor(.appTextSecondary)
                                     }
@@ -409,7 +415,9 @@ struct ChatView: View {
     }
 
     private var canSendMessage: Bool {
-        !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || selectedPhotoData != nil
+        !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || selectedPhotoData != nil
+            || selectedGifData != nil
     }
 
     private func loadChat() async {
@@ -500,8 +508,26 @@ struct ChatView: View {
         }
 
         do {
-            guard let data = try await item.loadTransferable(type: Data.self),
-                  let optimizedData = UIImage(data: data)?.jpegData(compressionQuality: 0.82),
+            guard let data = try await item.loadTransferable(type: Data.self) else {
+                errorMessage = "Couldn't load that photo. Try another one."
+                return
+            }
+
+            // GIFs go through unmodified — JPEG compression would strip
+            // the animation and we'd send a still frame. The preview's
+            // UIImage shows the first frame (UIImage doesn't animate
+            // directly, but the bubble will when sent).
+            if isGifData(data) {
+                let preview = UIImage(data: data)
+                await MainActor.run {
+                    selectedGifData = data
+                    selectedPhotoData = nil
+                    selectedPhotoPreview = preview
+                }
+                return
+            }
+
+            guard let optimizedData = UIImage(data: data)?.jpegData(compressionQuality: 0.82),
                   let preview = UIImage(data: optimizedData)
             else {
                 errorMessage = "Couldn't load that photo. Try another one."
@@ -510,6 +536,7 @@ struct ChatView: View {
 
             await MainActor.run {
                 selectedPhotoData = optimizedData
+                selectedGifData = nil
                 selectedPhotoPreview = preview
             }
         } catch {
@@ -517,17 +544,29 @@ struct ChatView: View {
         }
     }
 
+    /// Sniff the first 6 bytes for the GIF magic header (`GIF87a` /
+    /// `GIF89a`). Cheaper than asking PhotosPicker for UTType and avoids
+    /// PHPicker quirks where some library items don't expose their UTI.
+    private func isGifData(_ data: Data) -> Bool {
+        guard data.count >= 6 else { return false }
+        let header = data.prefix(6)
+        return header == Data([0x47, 0x49, 0x46, 0x38, 0x37, 0x61]) ||
+               header == Data([0x47, 0x49, 0x46, 0x38, 0x39, 0x61])
+    }
+
     private func clearSelectedPhoto() {
         selectedPhotoItem = nil
         selectedPhotoPreview = nil
         selectedPhotoData = nil
+        selectedGifData = nil
     }
 
     private func sendMessage() {
         guard canUseChatWrites else { return }
         let content = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         let photoData = selectedPhotoData
-        guard !content.isEmpty || photoData != nil else { return }
+        let gifData = selectedGifData
+        guard !content.isEmpty || photoData != nil || gifData != nil else { return }
 
         messageText = ""
         clearSelectedPhoto()
@@ -536,14 +575,17 @@ struct ChatView: View {
 
         Task {
             do {
-                try await chatService.sendMessage(content: content, photoData: photoData)
+                try await chatService.sendMessage(content: content, photoData: photoData, gifData: gifData)
             } catch AppError.unauthorized {
                 errorMessage = "Sign in to send messages."
             } catch {
                 errorMessage = error.localizedDescription
                 await MainActor.run {
                     messageText = content
-                    if let photoData, let preview = UIImage(data: photoData) {
+                    if let gifData {
+                        selectedGifData = gifData
+                        selectedPhotoPreview = UIImage(data: gifData)
+                    } else if let photoData, let preview = UIImage(data: photoData) {
                         selectedPhotoData = photoData
                         selectedPhotoPreview = preview
                     }

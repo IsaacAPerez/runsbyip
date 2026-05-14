@@ -13,8 +13,11 @@ struct InAppMessageBanner: View {
     @State private var dragOffset: CGFloat = 0
 
     private var preview: String {
+        let text = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if message.isGifMessage {
+            return text.isEmpty ? "🎞️ GIF" : "🎞️ \(text)"
+        }
         if message.isPhotoMessage {
-            let text = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
             return text.isEmpty ? "📷 Photo" : "📷 \(text)"
         }
         return message.content

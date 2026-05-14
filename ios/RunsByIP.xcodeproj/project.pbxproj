@@ -15,6 +15,7 @@
 		149FFF00040F9F9944F49D0D /* AdminGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2A48F7177813286AA503B5 /* AdminGalleryView.swift */; };
 		16D750C7D95D1AAA36268685 /* AppConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9697A95CCC7A9625C16E0BE /* AppConfigService.swift */; };
 		1702DE6918D89792085A7411 /* Date+Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 838386B173F360CAF3CC7CAA /* Date+Formatting.swift */; };
+		1799AFDDF198497B7C7631B2 /* AnimatedGifView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1C9891FF7B5E549DA8FD847 /* AnimatedGifView.swift */; };
 		1BAEA13EA1D2BBE1CF691DAF /* CountdownCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A598E8866CED905A359F91C6 /* CountdownCard.swift */; };
 		20687000ECDA757585333628 /* RunsByIPApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AEFA87777347DFE3EFDCBF /* RunsByIPApp.swift */; };
 		216B1658C8C1860E4025BADE /* PlayerRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2760C0801B49CA903B4BE693 /* PlayerRowView.swift */; };
@@ -112,6 +113,7 @@
 		BAA5323E06E0DA926C6D6FEC /* SessionCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCardView.swift; sourceTree = "<group>"; };
 		C8A20938BEAD722F6C847CBC /* RunsByIP.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RunsByIP.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D11581A4829F366CD4FC78DA /* SplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashView.swift; sourceTree = "<group>"; };
+		D1C9891FF7B5E549DA8FD847 /* AnimatedGifView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedGifView.swift; sourceTree = "<group>"; };
 		D9697A95CCC7A9625C16E0BE /* AppConfigService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfigService.swift; sourceTree = "<group>"; };
 		DB4012AF6FA68FCC46D244FD /* RSVPView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RSVPView.swift; sourceTree = "<group>"; };
 		E2D17CD550A7C7D9AEA96B7A /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
@@ -171,6 +173,7 @@
 		1D241888C6CF91DAA3C484D9 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				D1C9891FF7B5E549DA8FD847 /* AnimatedGifView.swift */,
 				E4EF9200262867E62FD9389F /* AvatarView.swift */,
 				971EA2DE800BBBAEE983057A /* BadgeView.swift */,
 				5636799E22A4668CBFAFA58E /* EmptyStateView.swift */,
@@ -413,6 +416,7 @@
 				7DBC6E7808DD4203F1B18E62 /* AdminDashboardView.swift in Sources */,
 				149FFF00040F9F9944F49D0D /* AdminGalleryView.swift in Sources */,
 				353B6F815E6EA5AA13E03639 /* AdminRSVPView.swift in Sources */,
+				1799AFDDF198497B7C7631B2 /* AnimatedGifView.swift in Sources */,
 				16D750C7D95D1AAA36268685 /* AppConfigService.swift in Sources */,
 				B5ED8AEB603EE98DC17B4C25 /* AppDelegate.swift in Sources */,
 				C0B0D27D3124D46E4A006897 /* AppRouter.swift in Sources */,
@@ -560,7 +564,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.0.7;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -620,7 +624,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.0.7;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

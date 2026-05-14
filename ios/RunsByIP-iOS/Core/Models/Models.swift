@@ -105,6 +105,12 @@ struct ChatMessage: Codable, Identifiable, Equatable {
         normalizedMessageType == "photo" && attachmentPath?.isEmpty == false
     }
 
+    var isGifMessage: Bool {
+        normalizedMessageType == "gif" && attachmentPath?.isEmpty == false
+    }
+
+    var isVisualMessage: Bool { isPhotoMessage || isGifMessage }
+
     var hasText: Bool {
         !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }

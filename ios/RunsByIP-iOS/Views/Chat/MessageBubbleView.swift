@@ -68,25 +68,31 @@ struct MessageBubbleView: View {
                     .onTapGesture { showImagePreview = false }
 
                 if let attachmentURL {
-                    AsyncImage(url: attachmentURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                        case .failure:
-                            photoFallback
-                                .padding(24)
-                        case .empty:
-                            ProgressView()
-                                .tint(.white)
-                        @unknown default:
-                            photoFallback
-                                .padding(24)
+                    if message.isGifMessage {
+                        AnimatedGifView(url: attachmentURL, contentMode: .scaleAspectFit)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .ignoresSafeArea()
+                    } else {
+                        AsyncImage(url: attachmentURL) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                            case .failure:
+                                photoFallback
+                                    .padding(24)
+                            case .empty:
+                                ProgressView()
+                                    .tint(.white)
+                            @unknown default:
+                                photoFallback
+                                    .padding(24)
+                            }
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .ignoresSafeArea()
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea()
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -122,7 +128,26 @@ struct MessageBubbleView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                if message.isPhotoMessage, let attachmentURL {
+                if message.isGifMessage, let attachmentURL {
+                    Button {
+                        showImagePreview = true
+                    } label: {
+                        AnimatedGifView(url: attachmentURL, contentMode: .scaleAspectFill)
+                            .frame(width: 220, height: 220)
+                            .background(Color.appSurface)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .overlay(alignment: .topTrailing) {
+                                Text("GIF")
+                                    .font(.caption2.bold())
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+                                    .padding(10)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                } else if message.isPhotoMessage, let attachmentURL {
                     Button {
                         showImagePreview = true
                     } label: {

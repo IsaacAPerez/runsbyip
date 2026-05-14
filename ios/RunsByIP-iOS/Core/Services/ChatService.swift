@@ -317,18 +317,26 @@ final class ChatService: ObservableObject {
 
     // MARK: - Send
 
-    func sendMessage(content: String, photoData: Data? = nil) async throws {
+    func sendMessage(content: String, photoData: Data? = nil, gifData: Data? = nil) async throws {
         guard let queue = outboundQueue else { throw AppError.unauthorized }
         let user = try await currentUser()
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || photoData != nil else { return }
+        guard !trimmed.isEmpty || photoData != nil || gifData != nil else { return }
 
         let displayName = user.userMetadata["display_name"]?.stringValue ?? "Anonymous"
         let userIdString = user.id.uuidString.lowercased()
 
         let result: ChatOutboundQueue.EnqueueResult
         let messageType: String
-        if let photoData {
+        if let gifData {
+            result = await queue.enqueueGif(
+                userId: userIdString,
+                displayName: displayName,
+                content: trimmed,
+                gifData: gifData
+            )
+            messageType = "gif"
+        } else if let photoData {
             result = await queue.enqueuePhoto(
                 userId: userIdString,
                 displayName: displayName,
