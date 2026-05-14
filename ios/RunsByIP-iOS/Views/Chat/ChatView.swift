@@ -38,6 +38,9 @@ struct ChatView: View {
     /// and pinned the viewport to the oldest message (the user's "tab open
     /// lands at top of convo" symptom).
     @State private var didSettleAtBottom: Bool = false
+    /// In-flight task fired by a chat-tab tap. Cancelled when a new tap
+    /// arrives so two quick taps don't queue duplicate scrolls.
+    @State private var tabScrollTask: Task<Void, Never>?
     @State private var unreadIncomingCount: Int = 0
     /// How many of the trailing rows count as "pinned near bottom". Set
     /// generously — being one or two screens up from the floor should
@@ -209,13 +212,30 @@ struct ChatView: View {
                                 }
                             }
                             .onChange(of: navigationCoordinator.scrollChatToBottomToken) { _, _ in
-                                // Tap chat tab → jump to newest. Small delay
-                                // lets the TabView animation settle so the
-                                // scroll lands on the freshly-rendered cells.
-                                Task { @MainActor in
+                                // Tap chat tab → jump to newest. We have to
+                                // be defensive: if the user was scrolled to
+                                // the top (where the "Load older…" sentinel
+                                // is visible), starting a scroll-down doesn't
+                                // dismount the sentinel until the animation
+                                // completes — during which its .onAppear can
+                                // fire again on re-layout, paginate older
+                                // messages, and pin the viewport back to the
+                                // top. That's the "tap bounces between
+                                // earliest and latest" bug. So we hide the
+                                // sentinel for the duration of the scroll
+                                // (same gate used by the initial settle),
+                                // and cancel any prior tap-task so rapid
+                                // re-taps don't queue duplicate scrolls.
+                                tabScrollTask?.cancel()
+                                tabScrollTask = Task { @MainActor in
+                                    didSettleAtBottom = false
                                     try? await Task.sleep(for: .milliseconds(120))
+                                    if Task.isCancelled { return }
                                     scrollToBottom(proxy: proxy)
                                     unreadIncomingCount = 0
+                                    try? await Task.sleep(for: .milliseconds(700))
+                                    if Task.isCancelled { return }
+                                    didSettleAtBottom = true
                                 }
                             }
                             .overlay(alignment: .bottom) {
