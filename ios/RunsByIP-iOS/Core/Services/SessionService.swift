@@ -104,6 +104,24 @@ final class SessionService: ObservableObject {
 
     // MARK: - RSVPs
 
+    /// RSVPs joined to profiles (by lower(email)) so the home card can
+    /// render a stack of "who's coming" avatars. Profile fields are
+    /// nullable in the join — RSVPs from guests who never created a
+    /// profile still come back with their name + email but no avatar.
+    func fetchRSVPParticipants(for sessionId: String) async throws -> [RSVPParticipant] {
+        struct Params: Encodable {
+            let p_session_id: String
+        }
+        do {
+            return try await supabase
+                .rpc("rsvp_participants_for_session", params: Params(p_session_id: sessionId))
+                .execute()
+                .value
+        } catch {
+            throw AppError.networkError(error.localizedDescription)
+        }
+    }
+
     func fetchRSVPs(for sessionId: String) async throws -> [RSVP] {
         do {
             return try await supabase

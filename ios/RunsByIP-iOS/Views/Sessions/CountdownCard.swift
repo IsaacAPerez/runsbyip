@@ -110,6 +110,10 @@ struct CountdownCardUnit: View {
                 .font(.system(size: 34, weight: .black).width(.condensed))
                 .foregroundColor(.white)
                 .monospacedDigit()
+                // iOS 17+ animates digit transitions so the countdown
+                // ticks down with a subtle roll instead of snapping.
+                .contentTransition(.numericText(countsDown: true))
+                .animation(.easeInOut(duration: 0.25), value: value)
 
             Text(label)
                 .font(.system(size: 18, weight: .bold).width(.condensed))

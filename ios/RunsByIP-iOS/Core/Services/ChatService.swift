@@ -965,10 +965,17 @@ final class ChatService: ObservableObject {
     private func handlePresenceChange(_ change: any PresenceAction) async {
         guard let me = await currentUserId else { return }
 
+        // Apply leaves first. Note: Phoenix presence emits a leave+join
+        // pair when an existing user's state changes (each track() call
+        // creates a new presence ref). For tracking "is this user
+        // online?" the leave removes them but the immediately-following
+        // join re-adds them — net effect is they stay online except on
+        // a true disconnect.
         for (_, presence) in change.leaves {
             guard let userId = presence.state["user_id"]?.stringValue else { continue }
             typingExpirations[userId] = nil
             typingUsers.removeAll { $0.id == userId }
+            presenceUserIds.remove(userId.lowercased())
         }
 
         for (_, presence) in change.joins {
@@ -976,6 +983,8 @@ final class ChatService: ObservableObject {
                   userId.lowercased() != me else { continue }
             let displayName = presence.state["display_name"]?.stringValue ?? "Anonymous"
             let isTyping = presence.state["typing"]?.boolValue ?? false
+
+            presenceUserIds.insert(userId.lowercased())
 
             if isTyping {
                 // 8s expiry: presence still cleans up on disconnect, but

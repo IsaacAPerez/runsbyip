@@ -609,6 +609,7 @@ struct ChatView: View {
         let gifData = selectedGifData
         guard !content.isEmpty || photoData != nil || gifData != nil else { return }
 
+        Haptics.impact(.light)
         messageText = ""
         clearSelectedPhoto()
         typingResetTask?.cancel()
@@ -640,6 +641,7 @@ struct ChatView: View {
             errorMessage = "Unlock chat below to react."
             return
         }
+        Haptics.selection()
         Task {
             do {
                 try await chatService.toggleReaction(messageId: messageId, emoji: emoji)
@@ -847,7 +849,11 @@ struct MembersListView: View {
                         Button {
                             selectedUser = user
                         } label: {
-                            MemberRow(user: user, isAdmin: isAdmin) {
+                            MemberRow(
+                                user: user,
+                                isOnline: chatService.presenceUserIds.contains(user.id.lowercased()),
+                                isAdmin: isAdmin
+                            ) {
                                 toggleMute(user: user)
                             }
                         }
@@ -899,6 +905,7 @@ struct MembersListView: View {
 
 private struct MemberRow: View {
     let user: UserProfile
+    var isOnline: Bool = false
     var isAdmin: Bool = false
     var onToggleMute: (() -> Void)?
 
@@ -919,12 +926,27 @@ private struct MemberRow: View {
                 avatarUrl: user.avatarUrl,
                 size: 44
             )
+            .overlay(alignment: .bottomTrailing) {
+                if isOnline {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 12, height: 12)
+                        .overlay(Circle().stroke(Color.appSurface, lineWidth: 2))
+                }
+            }
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(user.displayName ?? "Player")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
+
+                    if isOnline {
+                        Text("ONLINE")
+                            .font(.system(size: 9, weight: .heavy))
+                            .tracking(1)
+                            .foregroundColor(.green)
+                    }
 
                     if user.isMuted {
                         Image(systemName: "speaker.slash.fill")

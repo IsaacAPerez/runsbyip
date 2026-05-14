@@ -406,6 +406,26 @@ struct LeaderboardEntry: Identifiable, Equatable {
     var id: String { playerName }
 }
 
+// MARK: - Session participant (RSVP joined to profile)
+
+struct RSVPParticipant: Codable, Identifiable, Equatable {
+    let userId: String?
+    let name: String
+    let email: String
+    let avatarUrl: String?
+    let createdAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case name
+        case email
+        case avatarUrl = "avatar_url"
+        case createdAt = "created_at"
+    }
+
+    var id: String { email.lowercased() }
+}
+
 // MARK: - AppError
 
 enum AppError: LocalizedError {

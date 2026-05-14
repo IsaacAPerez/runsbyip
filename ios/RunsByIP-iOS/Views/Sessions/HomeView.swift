@@ -15,6 +15,7 @@ struct HomeView: View {
     @State private var lastLeaderboardFetchAt: Date?
     @State private var galleryURLs: [URL] = []
     @State private var sessionForRSVP: GameSession?
+    @State private var participants: [RSVPParticipant] = []
 
     /// Tab returns fire .task again, which previously refetched the
     /// leaderboard and reassigned it — SwiftUI then re-rendered the card
@@ -74,8 +75,10 @@ struct HomeView: View {
                             NextRunCard(
                                 session: session,
                                 confirmedCount: confirmedCount,
+                                participants: participants,
                                 onRSVP: {
                                     guard !session.isFull(using: confirmedCount) else { return }
+                                    Haptics.impact(.medium)
                                     sessionForRSVP = session
                                 }
                             )
@@ -138,6 +141,23 @@ struct HomeView: View {
             .onDisappear {
                 Task { await sessionService.unsubscribe() }
             }
+            .onChange(of: sessionService.currentSession?.id) { _, _ in
+                Task { await refreshParticipants() }
+            }
+            .onChange(of: sessionService.currentSessionRSVPCount) { _, _ in
+                Task { await refreshParticipants() }
+            }
+        }
+    }
+
+    private func refreshParticipants() async {
+        guard let sessionId = sessionService.currentSession?.id else {
+            if !participants.isEmpty { participants = [] }
+            return
+        }
+        let next = (try? await sessionService.fetchRSVPParticipants(for: sessionId)) ?? participants
+        if next != participants {
+            participants = next
         }
     }
 
@@ -275,6 +295,7 @@ private struct NextRunCard: View {
 
     let session: GameSession
     let confirmedCount: Int
+    let participants: [RSVPParticipant]
     let onRSVP: () -> Void
 
     private var spotsLeft: Int {
@@ -364,6 +385,10 @@ private struct NextRunCard: View {
                     .foregroundColor(.appTextSecondary)
             }
 
+            if !participants.isEmpty {
+                WhosComingRow(participants: participants)
+            }
+
             // CTA
             Button(action: onRSVP) {
                 Text(spotsLeft == 0 ? "RUN IS FULL" : (session.paymentsOpen ? "RSVP & PAY \(effectivePrice)" : "LOCK IN"))
@@ -389,6 +414,73 @@ private struct NextRunCard: View {
 }
 
 // Isolated countdown — TimelineView only invalidates itself, not the parent
+private struct WhosComingRow: View {
+    let participants: [RSVPParticipant]
+
+    private static let maxAvatars: Int = 5
+    private var avatarSize: CGFloat { 30 }
+    private var overlap: CGFloat { 10 }
+
+    private var visible: [RSVPParticipant] {
+        Array(participants.prefix(Self.maxAvatars))
+    }
+
+    private var overflow: Int {
+        max(0, participants.count - Self.maxAvatars)
+    }
+
+    private var caption: String {
+        let names = participants.prefix(2).map { $0.name }
+        switch participants.count {
+        case 1: return "\(names[0]) is locked in"
+        case 2: return "\(names[0]) and \(names[1]) are in"
+        default:
+            let rest = participants.count - 2
+            return "\(names[0]), \(names[1]) and \(rest) more"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ZStack(alignment: .leading) {
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, participant in
+                    AvatarView(
+                        name: participant.name,
+                        avatarUrl: participant.avatarUrl,
+                        size: avatarSize
+                    )
+                    .overlay(Circle().stroke(Color.appSurface, lineWidth: 2))
+                    .offset(x: CGFloat(index) * (avatarSize - overlap))
+                    .zIndex(Double(visible.count - index))
+                }
+                if overflow > 0 {
+                    Text("+\(overflow)")
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(.white)
+                        .frame(width: avatarSize, height: avatarSize)
+                        .background(Color.appSurfaceElevated, in: Circle())
+                        .overlay(Circle().stroke(Color.appSurface, lineWidth: 2))
+                        .offset(x: CGFloat(visible.count) * (avatarSize - overlap))
+                        .zIndex(0)
+                }
+            }
+            // Reserve the right amount of horizontal space for the stack so
+            // the caption doesn't sit on top of the avatars.
+            .frame(
+                width: CGFloat(visible.count + (overflow > 0 ? 1 : 0)) * (avatarSize - overlap) + overlap,
+                alignment: .leading
+            )
+
+            Text(caption)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.appTextSecondary)
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
+        }
+    }
+}
+
 private struct CountdownSection: View {
     let session: GameSession
 

@@ -185,6 +185,7 @@ struct MessageBubbleView: View {
             .modifier(ReactionContextMenuModifier(
                 reactionsAllowed: reactionsAllowed && isDeliverySent,
                 quickReactions: quickReactions,
+                messageText: message.content,
                 onReact: onReact
             ))
 
@@ -280,20 +281,23 @@ private struct FailedSendRow: View {
 private struct ReactionContextMenuModifier: ViewModifier {
     let reactionsAllowed: Bool
     let quickReactions: [String]
+    let messageText: String
     let onReact: (String) -> Void
 
     func body(content: Content) -> some View {
-        Group {
+        content.contextMenu {
             if reactionsAllowed {
-                content.contextMenu {
-                    ForEach(quickReactions, id: \.self) { emoji in
-                        Button(emoji) {
-                            onReact(emoji)
-                        }
-                    }
+                ForEach(quickReactions, id: \.self) { emoji in
+                    Button(emoji) { onReact(emoji) }
                 }
-            } else {
-                content
+            }
+            if !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Button {
+                    UIPasteboard.general.string = messageText
+                    Haptics.success()
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
             }
         }
     }

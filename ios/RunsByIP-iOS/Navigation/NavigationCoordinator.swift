@@ -26,7 +26,10 @@ final class NavigationCoordinator: ObservableObject {
         switch type {
         case "new_message":
             selectedTab = .chat
-        case "session_reminder", "spot_available":
+        case "session_reminder", "spot_available", "one_hour_reminder", "session_open":
+            selectedTab = .home
+        case "pow_vote_open", "pow_winner":
+            // POW card lives on the Home tab.
             selectedTab = .home
         default:
             break
