@@ -15,19 +15,20 @@ struct AvatarView: View {
 
     var body: some View {
         Group {
-            if let urlString = avatarUrl, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    case .failure, .empty:
-                        initialsView
-                    @unknown default:
-                        initialsView
-                    }
-                }
+            if let urlString = avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !urlString.isEmpty,
+               let url = URL(string: urlString) {
+                // Route avatar loads through CachedAsyncImage so transient
+                // network failures retry (3 attempts, exp backoff) instead
+                // of silently falling back to initials forever. The
+                // in-memory image cache also makes scrolled-out and re-
+                // entered cells paint their avatar instantly.
+                CachedAsyncImage(
+                    url: url,
+                    contentMode: .fill,
+                    failure: { initialsView },
+                    loading: { initialsView }
+                )
             } else {
                 initialsView
             }
