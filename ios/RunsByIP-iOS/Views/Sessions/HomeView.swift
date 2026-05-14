@@ -12,8 +12,15 @@ struct HomeView: View {
     @State private var errorMessage: String?
     @State private var showAllRuns = false
     @State private var leaderboard: [LeaderboardEntry] = []
+    @State private var lastLeaderboardFetchAt: Date?
     @State private var galleryURLs: [URL] = []
     @State private var sessionForRSVP: GameSession?
+
+    /// Tab returns fire .task again, which previously refetched the
+    /// leaderboard and reassigned it — SwiftUI then re-rendered the card
+    /// even when the data was identical. Skip the network round-trip if
+    /// we fetched recently.
+    private static let leaderboardTTL: TimeInterval = 60
 
     private var currentSession: GameSession? {
         sessionService.currentSession
@@ -151,7 +158,17 @@ struct HomeView: View {
             _ = try await sessionTask
             _ = try await pollTask
             if currentSession == nil {
-                leaderboard = try await sessionService.fetchLeaderboard()
+                let isFresh = lastLeaderboardFetchAt.map { Date().timeIntervalSince($0) < Self.leaderboardTTL } ?? false
+                if !isFresh {
+                    let next = try await sessionService.fetchLeaderboard()
+                    lastLeaderboardFetchAt = Date()
+                    // Only assign if it actually changed — otherwise the
+                    // identical-content reassignment makes SwiftUI repaint
+                    // the card for no reason.
+                    if next != leaderboard {
+                        leaderboard = next
+                    }
+                }
             }
         } catch {
             errorMessage = error.localizedDescription

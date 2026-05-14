@@ -400,7 +400,7 @@ struct POWVoteTally: Codable, Identifiable {
 
 // MARK: - Leaderboard
 
-struct LeaderboardEntry: Identifiable {
+struct LeaderboardEntry: Identifiable, Equatable {
     let playerName: String
     let gameCount: Int
     var id: String { playerName }
