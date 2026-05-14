@@ -31,13 +31,13 @@ struct ChatView: View {
     @State private var visibleMessageIds: Set<String> = []
     @State private var isLoadingOlder: Bool = false
     @State private var didInitialScroll: Bool = false
-    /// Flipped to true only after settleInitialScroll() has run through all
-    /// its retries. The top "Load older…" sentinel is gated on this so its
-    /// .onAppear can't fire during the initial top-down LazyVStack layout —
-    /// which previously raced settleInitialScroll, paginated older rows in,
-    /// and pinned the viewport to the oldest message (the user's "tab open
-    /// lands at top of convo" symptom).
-    @State private var didSettleAtBottom: Bool = false
+    /// True while we're driving a scroll programmatically (cold-launch
+    /// settle, tab-tap-to-bottom, keyboard-pin, new-message auto-pin).
+    /// The top "Load older…" sentinel only paginates when this is FALSE —
+    /// i.e., the user actually dragged their way to the top. Starts true
+    /// so the initial top-down LazyVStack layout can't trigger pagination
+    /// before settleInitialScroll runs.
+    @State private var isProgrammaticScrolling: Bool = true
     /// In-flight task fired by a chat-tab tap. Cancelled when a new tap
     /// arrives so two quick taps don't queue duplicate scrolls.
     @State private var tabScrollTask: Task<Void, Never>?
@@ -90,12 +90,15 @@ struct ChatView: View {
                         ScrollViewReader { proxy in
                             ScrollView {
                                 LazyVStack(spacing: 16) {
-                                    if chatService.hasMoreOlderMessages && didSettleAtBottom {
-                                        // Top sentinel — when it scrolls into
-                                        // view, page in the next older batch.
-                                        // Gated on didSettleAtBottom so the
-                                        // initial layout doesn't auto-paginate
-                                        // and yank the viewport to the top.
+                                    if chatService.hasMoreOlderMessages {
+                                        // Top sentinel: when the user has
+                                        // scrolled (with their finger) up to
+                                        // the very top of what's loaded, page
+                                        // in the next older batch. Programmatic
+                                        // scrolls (initial settle, tab-tap-to-
+                                        // bottom, keyboard pin, etc.) set
+                                        // isProgrammaticScrolling so this
+                                        // .onAppear is a no-op during them.
                                         HStack {
                                             Spacer()
                                             if isLoadingOlder {
@@ -109,6 +112,7 @@ struct ChatView: View {
                                         }
                                         .padding(.vertical, 8)
                                         .onAppear {
+                                            guard !isProgrammaticScrolling else { return }
                                             loadOlderMessages(proxy: proxy)
                                         }
                                     }
@@ -212,30 +216,21 @@ struct ChatView: View {
                                 }
                             }
                             .onChange(of: navigationCoordinator.scrollChatToBottomToken) { _, _ in
-                                // Tap chat tab → jump to newest. We have to
-                                // be defensive: if the user was scrolled to
-                                // the top (where the "Load older…" sentinel
-                                // is visible), starting a scroll-down doesn't
-                                // dismount the sentinel until the animation
-                                // completes — during which its .onAppear can
-                                // fire again on re-layout, paginate older
-                                // messages, and pin the viewport back to the
-                                // top. That's the "tap bounces between
-                                // earliest and latest" bug. So we hide the
-                                // sentinel for the duration of the scroll
-                                // (same gate used by the initial settle),
-                                // and cancel any prior tap-task so rapid
-                                // re-taps don't queue duplicate scrolls.
+                                // Tap chat tab → jump to newest. Mark the
+                                // scroll as programmatic so the top sentinel
+                                // can't paginate during the animation
+                                // (otherwise its re-layout-driven .onAppear
+                                // would yank the viewport back to the top).
                                 tabScrollTask?.cancel()
                                 tabScrollTask = Task { @MainActor in
-                                    didSettleAtBottom = false
+                                    isProgrammaticScrolling = true
                                     try? await Task.sleep(for: .milliseconds(120))
                                     if Task.isCancelled { return }
                                     scrollToBottom(proxy: proxy)
                                     unreadIncomingCount = 0
                                     try? await Task.sleep(for: .milliseconds(700))
                                     if Task.isCancelled { return }
-                                    didSettleAtBottom = true
+                                    isProgrammaticScrolling = false
                                 }
                             }
                             .overlay(alignment: .bottom) {
@@ -487,6 +482,7 @@ struct ChatView: View {
         // bubbles have rendered through their AsyncImage placeholder. A
         // single .onAppear scroll fires before the last cell exists and
         // strands the user near the top.
+        isProgrammaticScrolling = true
         if let lastId = chatService.messages.last?.id {
             proxy.scrollTo(lastId, anchor: .bottom)
         }
@@ -498,7 +494,7 @@ struct ChatView: View {
                     proxy.scrollTo(lastId, anchor: .bottom)
                 }
                 if delayMS == stops.last {
-                    didSettleAtBottom = true
+                    isProgrammaticScrolling = false
                 }
             }
         }
