@@ -77,7 +77,7 @@ struct MessageBubbleView: View {
                             url: attachmentURL,
                             contentMode: .fit,
                             failure: { photoFallback.padding(24) },
-                            loading: { ProgressView().tint(.white) }
+                            loading: { AppSpinner(color: .white, size: .sm) }
                         )
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .ignoresSafeArea()
@@ -148,8 +148,7 @@ struct MessageBubbleView: View {
                                 ZStack {
                                     RoundedRectangle(cornerRadius: 18)
                                         .fill(Color.appSurface)
-                                    ProgressView()
-                                        .tint(.white)
+                                    AppSpinner(color: .white, size: .md)
                                 }
                             }
                         )
@@ -193,7 +192,7 @@ struct MessageBubbleView: View {
                 FailedSendRow(reason: reason, onRetry: onRetry, onCancel: onCancelFailed)
             } else if isPendingForUser {
                 HStack(spacing: 4) {
-                    ProgressView().scaleEffect(0.6).tint(.appTextSecondary)
+                    AppSpinner(color: .appTextSecondary, size: .xs)
                     Text("Sending…")
                         .font(.caption2)
                         .foregroundColor(.appTextSecondary)

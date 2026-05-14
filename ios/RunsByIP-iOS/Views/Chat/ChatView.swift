@@ -102,7 +102,7 @@ struct ChatView: View {
                                         HStack {
                                             Spacer()
                                             if isLoadingOlder {
-                                                ProgressView().tint(.appTextSecondary)
+                                                AppSpinner(color: .appTextSecondary, size: .md)
                                             } else {
                                                 Text("Loading older…")
                                                     .font(.caption)
@@ -403,7 +403,7 @@ struct ChatView: View {
                                 toggleGlobalChatLock()
                             } label: {
                                 if isTogglingChatLock {
-                                    ProgressView().tint(.appAccentOrange).scaleEffect(0.8)
+                                    AppSpinner(size: .sm)
                                 } else {
                                     Image(systemName: appConfig.chatSendLocked ? "lock.fill" : "lock.open.fill")
                                         .foregroundColor(appConfig.chatSendLocked ? .appError : .appAccentOrange)
@@ -745,8 +745,7 @@ private struct ChatWriteGatePanel: View {
             } label: {
                 Group {
                     if isVerifying {
-                        ProgressView()
-                            .tint(.black)
+                        AppSpinner(color: .black, size: .md)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                     } else {

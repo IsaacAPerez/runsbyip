@@ -10,9 +10,7 @@ struct LoadingOverlay: ViewModifier {
                     ZStack {
                         Color.black.opacity(0.4)
                             .ignoresSafeArea()
-                        ProgressView()
-                            .tint(Color.appAccentOrange)
-                            .scaleEffect(1.2)
+                        AppSpinner(size: .lg)
                             .padding(24)
                             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                     }

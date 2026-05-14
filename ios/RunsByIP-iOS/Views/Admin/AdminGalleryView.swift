@@ -29,7 +29,7 @@ struct AdminGalleryView: View {
                         PhotosPicker(selection: $selectedItem, matching: .images) {
                             HStack {
                                 if isUploading {
-                                    ProgressView().tint(.appBackground).scaleEffect(0.8)
+                                    AppSpinner(color: .appBackground, size: .sm)
                                 } else {
                                     Image(systemName: "plus.circle.fill")
                                     Text("Add Photo")
@@ -167,7 +167,7 @@ private struct GalleryTile: View {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundColor(.appTextTertiary)
                 case .empty:
-                    ProgressView().tint(.appTextSecondary)
+                    AppSpinner(color: .appTextSecondary, size: .md)
                 @unknown default:
                     EmptyView()
                 }

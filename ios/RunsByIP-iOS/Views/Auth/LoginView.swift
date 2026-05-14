@@ -53,9 +53,7 @@ struct LoginView: View {
                     } label: {
                         HStack(spacing: AppSpacing.space8) {
                             if isLoading {
-                                ProgressView()
-                                    .tint(.appBackground)
-                                    .scaleEffect(0.8)
+                                AppSpinner(color: .appBackground, size: .sm)
                             } else {
                                 Image(systemName: "apple.logo")
                                     .font(.system(size: 18, weight: .semibold))

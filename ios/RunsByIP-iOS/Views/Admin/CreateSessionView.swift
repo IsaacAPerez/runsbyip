@@ -136,7 +136,7 @@ struct CreateSessionView: View {
                         } label: {
                             HStack {
                                 if isLoading {
-                                    ProgressView().tint(.appBackground).scaleEffect(0.8)
+                                    AppSpinner(color: .appBackground, size: .sm)
                                 } else {
                                     Text("Create Session")
                                         .fontWeight(.semibold)

@@ -125,7 +125,7 @@ struct AdminDashboardView: View {
                                 } label: {
                                     HStack {
                                         if isCreatingPoll {
-                                            ProgressView().tint(.white).scaleEffect(0.8)
+                                            AppSpinner(color: .white, size: .sm)
                                         } else {
                                             Image(systemName: "trophy.fill")
                                                 .foregroundColor(Color(hex: "FFD700"))
@@ -170,7 +170,7 @@ struct AdminDashboardView: View {
                                         } label: {
                                             HStack {
                                                 if isSavingDiscount {
-                                                    ProgressView().tint(.white).scaleEffect(0.8)
+                                                    AppSpinner(color: .white, size: .sm)
                                                 } else {
                                                     Text("Save")
                                                         .fontWeight(.semibold)
@@ -209,7 +209,7 @@ struct AdminDashboardView: View {
                                     } label: {
                                         HStack {
                                             if isSendingPush {
-                                                ProgressView().tint(.white).scaleEffect(0.8)
+                                                AppSpinner(color: .white, size: .sm)
                                             } else {
                                                 Image(systemName: "paperplane.fill")
                                                 Text("Send Test Push")

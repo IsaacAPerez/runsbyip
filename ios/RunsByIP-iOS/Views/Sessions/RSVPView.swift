@@ -119,9 +119,7 @@ struct RSVPView: View {
                             } label: {
                                 HStack(spacing: 10) {
                                     if isLoading || paymentService.isProcessing {
-                                        ProgressView()
-                                            .tint(.white)
-                                            .scaleEffect(0.8)
+                                        AppSpinner(color: .white, size: .sm)
                                     }
 
                                     Text(paymentService.isProcessing ? "PROCESSING PAYMENT..." : "LOCK IN SPOT — \(effectivePriceDisplay)")
@@ -313,7 +311,7 @@ struct RSVPView: View {
 
     private func expressLoadingButton(bgColor: Color, fgColor: Color) -> some View {
         HStack {
-            ProgressView().tint(fgColor).scaleEffect(0.8)
+            AppSpinner(color: fgColor, size: .sm)
         }
         .frame(maxWidth: .infinity)
         .frame(height: 48)
@@ -963,7 +961,7 @@ private struct ExpressMethodButton: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 if isLoading {
-                    ProgressView().tint(fgColor).scaleEffect(0.8)
+                    AppSpinner(color: fgColor, size: .sm)
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 14, weight: .bold))

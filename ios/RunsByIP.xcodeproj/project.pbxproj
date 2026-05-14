@@ -40,6 +40,7 @@
 		7A9C2EFE83D9508A9C70F2B8 /* Color+App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24CC3B759134E70C3D9D82BD /* Color+App.swift */; };
 		7DBC6E7808DD4203F1B18E62 /* AdminDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBAEDFE3DFDB6B1E5ABA9259 /* AdminDashboardView.swift */; };
 		875FD4334154C92FBBF0D787 /* FontPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 669D9E491AB4419C6A09F6E4 /* FontPreviewView.swift */; };
+		88EBA58EB9A57DD814303C75 /* AppSpinner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F994628EEA06580CD67A3709 /* AppSpinner.swift */; };
 		90FB1CA23672DA7C2CB6FD48 /* UserPublicProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF6540426CE17BA383723E3C /* UserPublicProfileView.swift */; };
 		9334B0CEE14B7216B13CF512 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79C52B74D961BCB7F025F62A /* ChatView.swift */; };
 		96E1CBFBDE600DBFE1FA7059 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35D1619C42A8901D6962DD69 /* HomeView.swift */; };
@@ -132,6 +133,7 @@
 		F4829066F9DB029430FC2BE0 /* String+Validation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Validation.swift"; sourceTree = "<group>"; };
 		F4AEFA87777347DFE3EFDCBF /* RunsByIPApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunsByIPApp.swift; sourceTree = "<group>"; };
 		F540197A7CD9C9C6924402CD /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
+		F994628EEA06580CD67A3709 /* AppSpinner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSpinner.swift; sourceTree = "<group>"; };
 		FB91EF8F4364E94BD9795BA5 /* POWCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = POWCard.swift; sourceTree = "<group>"; };
 		FBAEDFE3DFDB6B1E5ABA9259 /* AdminDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminDashboardView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -182,6 +184,7 @@
 			isa = PBXGroup;
 			children = (
 				D1C9891FF7B5E549DA8FD847 /* AnimatedGifView.swift */,
+				F994628EEA06580CD67A3709 /* AppSpinner.swift */,
 				E4EF9200262867E62FD9389F /* AvatarView.swift */,
 				971EA2DE800BBBAEE983057A /* BadgeView.swift */,
 				250476B69082E840E96E1152 /* CachedAsyncImage.swift */,
@@ -440,6 +443,7 @@
 				16D750C7D95D1AAA36268685 /* AppConfigService.swift in Sources */,
 				B5ED8AEB603EE98DC17B4C25 /* AppDelegate.swift in Sources */,
 				C0B0D27D3124D46E4A006897 /* AppRouter.swift in Sources */,
+				88EBA58EB9A57DD814303C75 /* AppSpinner.swift in Sources */,
 				EB49CC744E95ABCFE4E7E920 /* AuthService.swift in Sources */,
 				A741B5E8E852306D9E6A3BBE /* AvatarView.swift in Sources */,
 				3544D7295365EC6E7912BF36 /* BadgeView.swift in Sources */,

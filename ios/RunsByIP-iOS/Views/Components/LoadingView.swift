@@ -5,10 +5,7 @@ struct LoadingView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            ProgressView()
-                .progressViewStyle(.circular)
-                .tint(.appAccentOrange)
-                .scaleEffect(1.2)
+            AppSpinner(size: .lg)
 
             if let message {
                 Text(message)

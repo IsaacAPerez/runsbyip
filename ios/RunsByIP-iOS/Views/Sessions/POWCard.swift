@@ -70,7 +70,7 @@ struct POWCard: View {
                 } label: {
                     HStack(spacing: 6) {
                         if isClosingPoll {
-                            ProgressView().tint(.appError).scaleEffect(0.8)
+                            AppSpinner(color: .appError, size: .sm)
                         } else {
                             Image(systemName: "stop.circle.fill")
                         }

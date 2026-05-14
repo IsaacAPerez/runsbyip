@@ -109,7 +109,7 @@ struct ProfileView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if isSaving {
-                        ProgressView().tint(.appAccentOrange)
+                        AppSpinner(size: .md)
                     } else if isEditing {
                         Button("Save") { saveProfile() }
                             .foregroundColor(canSaveProfile ? .appAccentOrange : .appTextSecondary)
@@ -402,7 +402,7 @@ struct ProfileView: View {
             } label: {
                 HStack(spacing: 10) {
                     if isDeletingAccount {
-                        ProgressView().tint(.appError)
+                        AppSpinner(color: .appError, size: .md)
                     } else {
                         Image(systemName: "trash")
                     }

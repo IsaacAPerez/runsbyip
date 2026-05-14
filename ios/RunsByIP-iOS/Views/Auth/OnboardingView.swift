@@ -305,7 +305,7 @@ struct OnboardingView: View {
                 } label: {
                     Group {
                         if isSaving {
-                            ProgressView().tint(.appBackground)
+                            AppSpinner(color: .appBackground, size: .md)
                         } else {
                             Text("SAVE & CONTINUE")
                                 .font(.system(size: 15, weight: .black))
