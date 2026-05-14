@@ -10,6 +10,15 @@ enum Tab: Hashable {
 @MainActor
 final class NavigationCoordinator: ObservableObject {
     @Published var selectedTab: Tab = .home
+    /// Bumped every time the user selects the chat tab — whether switching
+    /// to it from another tab or re-tapping it while already on it. The
+    /// chat view observes this token and scrolls to the newest message,
+    /// matching the standard iOS chat-app convention.
+    @Published var scrollChatToBottomToken: UUID = UUID()
+
+    func requestScrollChatToBottom() {
+        scrollChatToBottomToken = UUID()
+    }
 
     func handleNotificationTap(payload: [String: String]) {
         guard let type = payload["type"] else { return }

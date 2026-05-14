@@ -140,8 +140,24 @@ struct MainTabView: View {
         authService.isAdmin
     }
 
+    /// Wrap the selection binding so we can detect *every* selection of
+    /// the chat tab — including re-taps when it's already selected.
+    /// SwiftUI's onChange doesn't fire for re-selection (the value
+    /// doesn't change), but the binding's setter still runs.
+    private var tabSelectionBinding: Binding<Tab> {
+        Binding(
+            get: { navigationCoordinator.selectedTab },
+            set: { newTab in
+                if newTab == .chat {
+                    navigationCoordinator.requestScrollChatToBottom()
+                }
+                navigationCoordinator.selectedTab = newTab
+            }
+        )
+    }
+
     var body: some View {
-        TabView(selection: $navigationCoordinator.selectedTab) {
+        TabView(selection: tabSelectionBinding) {
             HomeView()
                 .tabItem {
                     Label("Home", systemImage: "figure.basketball")

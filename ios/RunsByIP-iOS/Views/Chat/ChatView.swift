@@ -5,6 +5,7 @@ struct ChatView: View {
     @EnvironmentObject var chatService: ChatService
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var appConfig: AppConfigService
+    @EnvironmentObject var navigationCoordinator: NavigationCoordinator
     @StateObject private var chatWriteGate = ChatWriteGate()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -30,6 +31,13 @@ struct ChatView: View {
     @State private var visibleMessageIds: Set<String> = []
     @State private var isLoadingOlder: Bool = false
     @State private var didInitialScroll: Bool = false
+    /// Flipped to true only after settleInitialScroll() has run through all
+    /// its retries. The top "Load older…" sentinel is gated on this so its
+    /// .onAppear can't fire during the initial top-down LazyVStack layout —
+    /// which previously raced settleInitialScroll, paginated older rows in,
+    /// and pinned the viewport to the oldest message (the user's "tab open
+    /// lands at top of convo" symptom).
+    @State private var didSettleAtBottom: Bool = false
     @State private var unreadIncomingCount: Int = 0
     /// How many of the trailing rows count as "pinned near bottom". Set
     /// generously — being one or two screens up from the floor should
@@ -79,9 +87,12 @@ struct ChatView: View {
                         ScrollViewReader { proxy in
                             ScrollView {
                                 LazyVStack(spacing: 16) {
-                                    if chatService.hasMoreOlderMessages {
+                                    if chatService.hasMoreOlderMessages && didSettleAtBottom {
                                         // Top sentinel — when it scrolls into
                                         // view, page in the next older batch.
+                                        // Gated on didSettleAtBottom so the
+                                        // initial layout doesn't auto-paginate
+                                        // and yank the viewport to the top.
                                         HStack {
                                             Spacer()
                                             if isLoadingOlder {
@@ -194,6 +205,16 @@ struct ChatView: View {
                                     .suffix(Self.pinnedBottomLookback)
                                     .contains { visibleMessageIds.contains($0.id) }
                                 if nearBottom {
+                                    unreadIncomingCount = 0
+                                }
+                            }
+                            .onChange(of: navigationCoordinator.scrollChatToBottomToken) { _, _ in
+                                // Tap chat tab → jump to newest. Small delay
+                                // lets the TabView animation settle so the
+                                // scroll lands on the freshly-rendered cells.
+                                Task { @MainActor in
+                                    try? await Task.sleep(for: .milliseconds(120))
+                                    scrollToBottom(proxy: proxy)
                                     unreadIncomingCount = 0
                                 }
                             }
@@ -449,11 +470,15 @@ struct ChatView: View {
         if let lastId = chatService.messages.last?.id {
             proxy.scrollTo(lastId, anchor: .bottom)
         }
-        for delayMS in [50, 200, 500, 900] {
+        let stops = [50, 200, 500, 900]
+        for delayMS in stops {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(delayMS))
                 if let lastId = chatService.messages.last?.id {
                     proxy.scrollTo(lastId, anchor: .bottom)
+                }
+                if delayMS == stops.last {
+                    didSettleAtBottom = true
                 }
             }
         }
