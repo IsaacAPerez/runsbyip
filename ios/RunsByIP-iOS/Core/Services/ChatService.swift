@@ -16,6 +16,11 @@ final class ChatService: ObservableObject {
     @Published private(set) var hasLoadedInitial: Bool = false
     @Published private(set) var deliveryStateById: [String: MessageDeliveryState] = [:]
     @Published private(set) var presenceUserIds: Set<String> = []
+    /// Set when a realtime insert lands from another user. Surfaces the
+    /// in-app banner overlay (which only shows when the user is not on
+    /// the chat tab). The view clears this when the banner is dismissed
+    /// or auto-times-out.
+    @Published var incomingMessageNotification: ChatMessage?
 
     static let pageSize: Int = 50
     /// Soft cap on in-memory rows. Older rows live on disk and are paged in
@@ -579,27 +584,30 @@ final class ChatService: ObservableObject {
     // MARK: - Typing (presence + broadcast belt-and-suspenders)
 
     func setTyping(isTyping: Bool) {
-        // Throttle — receiver's typing window is 4s. Always emit immediately
-        // on state flips so transitions feel instant.
+        // Throttle while the state is unchanged so a long keystroke run
+        // doesn't push the channel — but always emit immediately when the
+        // boolean flips so transitions land without delay.
         let now = Date()
         let stateChanged = lastTypingEmittedState != isTyping
         if !stateChanged,
            let last = lastTypingEmittedAt,
-           now.timeIntervalSince(last) < 2.0 {
+           now.timeIntervalSince(last) < 3.0 {
             return
         }
         lastTypingEmittedState = isTyping
         lastTypingEmittedAt = now
 
-        Task {
-            guard let user = try? await currentUser() else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            guard let channel = self.typingChannel,
+                  let user = try? await self.currentUser() else { return }
             let displayName = user.userMetadata["display_name"]?.stringValue ?? "Anonymous"
-            let payload: [String: String] = [
-                "user_id": user.id.uuidString,
-                "display_name": displayName,
-                "state": isTyping ? "typing" : "idle"
+            let state: [String: AnyJSON] = [
+                "user_id": .string(user.id.uuidString.lowercased()),
+                "display_name": .string(displayName),
+                "typing": .bool(isTyping),
             ]
-            try? await typingChannel?.broadcast(event: "typing", message: payload)
+            await channel.track(state: state)
         }
     }
 
@@ -724,6 +732,13 @@ final class ChatService: ObservableObject {
                 self.messages.append(raw)
                 self.persistToDisk()
 
+                // Surface an in-app banner for messages from other users.
+                // The view layer decides whether to actually show it (only
+                // when the user isn't already on the chat tab).
+                if let me = await self.currentUserId, raw.userId.lowercased() != me {
+                    self.incomingMessageNotification = raw
+                }
+
                 let cached = (avatarURLByUserId[raw.userId.lowercased()] ?? "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if cached.isEmpty {
@@ -802,22 +817,24 @@ final class ChatService: ObservableObject {
         }
     }
 
+    /// Typing indicator via Supabase Presence. Broadcast was unreliable at
+    /// game-night scale (10+ users): events have no replay, so a client
+    /// that joined a moment after someone started typing would never see
+    /// it until the next 2s re-emit. Presence delivers the full current
+    /// state on join, auto-cleans on disconnect, and survives transient
+    /// channel resubscribes — meaningfully more durable for live chat.
     private func subscribeToTypingPresence() async {
         let channel = supabase.realtimeV2.channel("chat-typing-room")
         typingChannel = channel
 
-        let typingEvents = channel.broadcastStream(event: "typing")
+        // IMPORTANT: presence callbacks MUST be registered before subscribe
+        // per supabase-swift's contract. Do not move this below the
+        // subscribeWithError() call.
+        let presenceChanges = channel.presenceChange()
 
         Task { [weak self] in
-            for await event in typingEvents {
-                guard let self else { return }
-                guard let payload = event["payload"]?.objectValue,
-                      let userId = payload["user_id"]?.stringValue,
-                      let displayName = payload["display_name"]?.stringValue,
-                      let state = payload["state"]?.stringValue
-                else { continue }
-
-                await self.handleTypingEvent(userId: userId, displayName: displayName, state: state)
+            for await change in presenceChanges {
+                await self?.handlePresenceChange(change)
             }
         }
 
@@ -825,6 +842,19 @@ final class ChatService: ObservableObject {
             try await channel.subscribeWithError()
         } catch {
             print("[ChatService] typing channel subscribe failed: \(error)")
+            return
+        }
+
+        // Track our initial presence (typing: false). All other subscribers
+        // will see us in their join diff. setTyping() updates this state.
+        if let user = try? await currentUser() {
+            let displayName = user.userMetadata["display_name"]?.stringValue ?? "Anonymous"
+            let state: [String: AnyJSON] = [
+                "user_id": .string(user.id.uuidString.lowercased()),
+                "display_name": .string(displayName),
+                "typing": .bool(false),
+            ]
+            await channel.track(state: state)
         }
 
         typingExpiryTask?.cancel()
@@ -836,19 +866,38 @@ final class ChatService: ObservableObject {
         }
     }
 
-    private func handleTypingEvent(userId: String, displayName: String, state: String) async {
-        guard let currentUserId = try? await currentUser().id.uuidString, currentUserId != userId else { return }
+    /// Reconciles `typingUsers` from a presence-diff. Joins with `typing:
+    /// true` are added; joins with `typing: false` clear that user.
+    /// Leaves always clear the user (disconnect = stop typing).
+    private func handlePresenceChange(_ change: any PresenceAction) async {
+        guard let me = await currentUserId else { return }
 
-        if state == "typing" {
-            typingExpirations[userId] = Date().addingTimeInterval(4)
-            if let index = typingUsers.firstIndex(where: { $0.id == userId }) {
-                typingUsers[index] = ChatTypingUser(id: userId, displayName: displayName)
-            } else {
-                typingUsers.append(ChatTypingUser(id: userId, displayName: displayName))
-            }
-        } else {
+        for (_, presence) in change.leaves {
+            guard let userId = presence.state["user_id"]?.stringValue else { continue }
             typingExpirations[userId] = nil
             typingUsers.removeAll { $0.id == userId }
+        }
+
+        for (_, presence) in change.joins {
+            guard let userId = presence.state["user_id"]?.stringValue,
+                  userId.lowercased() != me else { continue }
+            let displayName = presence.state["display_name"]?.stringValue ?? "Anonymous"
+            let isTyping = presence.state["typing"]?.boolValue ?? false
+
+            if isTyping {
+                // 8s expiry: presence still cleans up on disconnect, but
+                // we belt-and-suspenders the visible state in case a
+                // "typing: false" join is dropped between subscribers.
+                typingExpirations[userId] = Date().addingTimeInterval(8)
+                if let index = typingUsers.firstIndex(where: { $0.id == userId }) {
+                    typingUsers[index] = ChatTypingUser(id: userId, displayName: displayName)
+                } else {
+                    typingUsers.append(ChatTypingUser(id: userId, displayName: displayName))
+                }
+            } else {
+                typingExpirations[userId] = nil
+                typingUsers.removeAll { $0.id == userId }
+            }
         }
     }
 

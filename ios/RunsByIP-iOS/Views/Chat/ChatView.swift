@@ -27,7 +27,12 @@ struct ChatView: View {
     @State private var isLoadingOlder: Bool = false
     @State private var didInitialScroll: Bool = false
     @State private var unreadIncomingCount: Int = 0
-    private static let pinnedBottomLookback: Int = 3
+    /// How many of the trailing rows count as "pinned near bottom". Set
+    /// generously — being one or two screens up from the floor should
+    /// still auto-scroll on a new message. Reading actual history (where
+    /// the bottom 8 rows aren't on screen) is where the new-message pill
+    /// kicks in.
+    private static let pinnedBottomLookback: Int = 8
 
     private var isMuted: Bool { chatService.currentUserMuted }
 

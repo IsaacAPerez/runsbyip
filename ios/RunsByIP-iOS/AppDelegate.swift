@@ -39,7 +39,17 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        // Show banner even when app is in foreground
+        // For chat messages while the app is foregrounded, suppress the
+        // system banner — ChatService delivers the message live via
+        // realtime and we render our own in-app banner so the user
+        // doesn't get a duplicate system notification on top of seeing
+        // the bubble appear. Non-chat pushes (session reminders, etc.)
+        // still get the standard treatment.
+        let type = notification.request.content.userInfo["type"] as? String
+        if type == "new_message" {
+            completionHandler([])
+            return
+        }
         completionHandler([.banner, .sound, .badge])
     }
 

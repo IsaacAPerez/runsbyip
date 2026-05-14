@@ -170,6 +170,47 @@ struct MainTabView: View {
         }
         .tint(Color.appAccentOrange)
         .preferredColorScheme(.dark)
+        .overlay(alignment: .top) {
+            // In-app message banner — only when the user isn't already on
+            // chat. Auto-dismisses after a short window; tap jumps to chat.
+            if let incoming = chatService.incomingMessageNotification,
+               navigationCoordinator.selectedTab != .chat {
+                InAppMessageBanner(
+                    message: incoming,
+                    avatarUrl: chatService.effectiveAvatarURL(
+                        for: incoming,
+                        currentUserId: nil,
+                        currentUserProfileAvatar: nil
+                    ),
+                    onTap: {
+                        navigationCoordinator.selectedTab = .chat
+                        chatService.incomingMessageNotification = nil
+                    },
+                    onDismiss: {
+                        chatService.incomingMessageNotification = nil
+                    }
+                )
+                .padding(.top, 4)
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: incoming.id)
+            }
+        }
+        .onChange(of: chatService.incomingMessageNotification?.id) { _, newId in
+            guard newId != nil else { return }
+            // Auto-dismiss after 4 seconds unless replaced by a newer one.
+            Task { @MainActor in
+                let dismissedId = newId
+                try? await Task.sleep(for: .seconds(4))
+                if chatService.incomingMessageNotification?.id == dismissedId {
+                    chatService.incomingMessageNotification = nil
+                }
+            }
+        }
+        .onChange(of: navigationCoordinator.selectedTab) { _, newTab in
+            // If the user jumps to chat manually, clear any pending banner.
+            if newTab == .chat {
+                chatService.incomingMessageNotification = nil
+            }
+        }
         .task(id: authService.currentUser?.id) {
             // Sign-out path: tear chat down so realtime channels close and
             // disk cache + outbound queue rebind on next sign-in.

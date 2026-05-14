@@ -18,7 +18,7 @@ struct MessageBubbleView: View {
 
     @State private var showImagePreview = false
 
-    private let quickReactions = ["🔥", "😂", "🙌", "👀", "🏀", "💯"]
+    private let quickReactions: [String] = Array(EmojiCatalog.popular.prefix(6))
 
     private var resolvedAvatarURL: String? {
         if let u = avatarDisplayURL?.trimmingCharacters(in: .whitespacesAndNewlines), !u.isEmpty { return u }
@@ -299,6 +299,8 @@ private struct ReactionBar: View {
     let reactionsAllowed: Bool
     let onReact: (String) -> Void
 
+    @State private var showPicker = false
+
     var body: some View {
         HStack(spacing: 8) {
             ForEach(reactions) { reaction in
@@ -329,12 +331,8 @@ private struct ReactionBar: View {
                 .opacity(reactionsAllowed ? 1 : 0.45)
             }
 
-            Menu {
-                ForEach(quickReactions, id: \.self) { emoji in
-                    Button(emoji) {
-                        onReact(emoji)
-                    }
-                }
+            Button {
+                showPicker = true
             } label: {
                 Image(systemName: "face.smiling")
                     .font(.caption.bold())
@@ -342,8 +340,14 @@ private struct ReactionBar: View {
                     .padding(8)
                     .background(Color.white.opacity(0.06), in: Circle())
             }
+            .buttonStyle(.plain)
             .disabled(!reactionsAllowed)
             .opacity(reactionsAllowed ? 1 : 0.45)
+            .sheet(isPresented: $showPicker) {
+                EmojiPickerView { emoji in
+                    onReact(emoji)
+                }
+            }
         }
     }
 }
