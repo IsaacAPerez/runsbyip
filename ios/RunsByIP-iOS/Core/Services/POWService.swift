@@ -1,5 +1,6 @@
 import Foundation
 @preconcurrency import Supabase
+import Realtime
 
 @MainActor
 final class POWService: ObservableObject {
@@ -7,8 +8,13 @@ final class POWService: ObservableObject {
     @Published var tallies: [POWVoteTally] = []
     @Published var eligiblePlayers: [String] = []
     @Published var userVotedFor: String?
+    /// Set when a pow_polls UPDATE flips a poll from open → closed with a
+    /// real winner_name. Drives the in-app celebration banner. iOS clears
+    /// this after the banner is dismissed.
+    @Published var winnerAnnouncement: POWPoll?
 
     private var supabase: SupabaseClient { SupabaseService.shared.client }
+    private var pollsChannel: RealtimeChannelV2?
 
     // MARK: - Fetch Current Poll
 
@@ -132,6 +138,78 @@ final class POWService: ObservableObject {
             }
         }
         userVotedFor = nil
+    }
+
+    // MARK: - Realtime: poll closes
+
+    /// Subscribe to pow_polls UPDATE events. When a poll flips to
+    /// `closed` with a real winner_name, surface it via
+    /// winnerAnnouncement so the UI can show its celebration banner.
+    /// Idempotent — calling twice is harmless.
+    func subscribeToPollUpdates() async {
+        if pollsChannel != nil { return }
+        let channel = supabase.realtimeV2.channel("pow-polls-room")
+        pollsChannel = channel
+
+        let updates = channel.postgresChange(UpdateAction.self, table: "pow_polls")
+
+        Task { [weak self] in
+            let decoder = JSONDecoder()
+            for await update in updates {
+                guard let self else { return }
+                guard let poll = try? update.decodeRecord(as: POWPoll.self, decoder: decoder) else { continue }
+                self.currentPoll = poll
+                if poll.status == "closed",
+                   let name = poll.winnerName,
+                   !name.isEmpty,
+                   name != "No votes" {
+                    self.winnerAnnouncement = poll
+                }
+            }
+        }
+
+        do { try await channel.subscribeWithError() } catch {
+            print("[POWService] pow-polls channel subscribe failed: \(error)")
+        }
+    }
+
+    func unsubscribeFromPollUpdates() async {
+        await pollsChannel?.unsubscribe()
+        pollsChannel = nil
+    }
+
+    // MARK: - Admin: close current poll immediately
+
+    func adminClosePoll(_ pollId: String) async throws {
+        struct Params: Encodable {
+            let p_poll_id: String
+        }
+        do {
+            try await supabase
+                .rpc("admin_close_pow_poll", params: Params(p_poll_id: pollId))
+                .execute()
+            try await fetchCurrentPoll()
+        } catch {
+            throw AppError.networkError(error.localizedDescription)
+        }
+    }
+
+    // MARK: - Lifetime POW wins for a display name
+
+    func fetchWinCount(forDisplayName name: String) async -> Int {
+        struct Row: Decodable { let id: String }
+        do {
+            let rows: [Row] = try await supabase
+                .from("pow_polls")
+                .select("id")
+                .eq("status", value: "closed")
+                .eq("winner_name", value: name)
+                .execute()
+                .value
+            return rows.count
+        } catch {
+            return 0
+        }
     }
 
     func checkUserVoteFromServer() async {

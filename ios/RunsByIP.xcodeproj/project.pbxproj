@@ -31,6 +31,7 @@
 		4967595ACAE0EC96F97B4BE9 /* ColorPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F2460D263FA83CFA5FDE02 /* ColorPreviewView.swift */; };
 		4A027480F40C2F3825519144 /* String+Validation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4829066F9DB029430FC2BE0 /* String+Validation.swift */; };
 		4B64DE398F991768EEA74F64 /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE3D88652D6E68B3A90BB4 /* Haptics.swift */; };
+		5484B07C2E13AD91E728A9E4 /* POWWinnerBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C5D21964691F94D28D8A251 /* POWWinnerBanner.swift */; };
 		594212F90616187522AD8428 /* EmojiCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E74E36F9FFE209658E9726FE /* EmojiCatalog.swift */; };
 		616545B575C70B0159D9E564 /* EmojiPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86960DFAAF0E2FE4233E2B15 /* EmojiPickerView.swift */; };
 		6844E2A3420B8B228D762C0A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 74D0282577862295C4ADBBC8 /* Assets.xcassets */; };
@@ -75,6 +76,7 @@
 		12421C78E61976BC294ECB1E /* ChatOutboundQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatOutboundQueue.swift; sourceTree = "<group>"; };
 		184BE1D7A646185980C24A37 /* POWService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = POWService.swift; sourceTree = "<group>"; };
 		1959B9DD9898C2D0992E4C32 /* View+Loading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Loading.swift"; sourceTree = "<group>"; };
+		1C5D21964691F94D28D8A251 /* POWWinnerBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = POWWinnerBanner.swift; sourceTree = "<group>"; };
 		24CC3B759134E70C3D9D82BD /* Color+App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+App.swift"; sourceTree = "<group>"; };
 		250476B69082E840E96E1152 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
 		2760C0801B49CA903B4BE693 /* PlayerRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerRowView.swift; sourceTree = "<group>"; };
@@ -185,6 +187,7 @@
 				673C3C19F5026DCFBED6EC53 /* HeroGalleryView.swift */,
 				115356677835FDBFB28A9EFC /* LoadingView.swift */,
 				2760C0801B49CA903B4BE693 /* PlayerRowView.swift */,
+				1C5D21964691F94D28D8A251 /* POWWinnerBanner.swift */,
 				D11581A4829F366CD4FC78DA /* SplashView.swift */,
 				45E7AE55CEFCC4CA740124D5 /* ToastView.swift */,
 			);
@@ -467,6 +470,7 @@
 				099336751B766B786D7D2F46 /* OnboardingView.swift in Sources */,
 				476D8580CF641AD44E9A1923 /* POWCard.swift in Sources */,
 				28549ECA65A539D735D58EA2 /* POWService.swift in Sources */,
+				5484B07C2E13AD91E728A9E4 /* POWWinnerBanner.swift in Sources */,
 				B279C307C71F168248FDE012 /* PaymentService.swift in Sources */,
 				216B1658C8C1860E4025BADE /* PlayerRowView.swift in Sources */,
 				DEBE4A372371A74599C7C1F5 /* ProfileView.swift in Sources */,

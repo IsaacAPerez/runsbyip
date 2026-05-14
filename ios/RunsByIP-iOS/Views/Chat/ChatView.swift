@@ -375,6 +375,27 @@ struct ChatView: View {
             }
             .condensedNavTitle("Chat")
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text("Chat")
+                            .font(.system(size: 17, weight: .semibold).width(.condensed))
+                            .foregroundColor(.white)
+                        // presenceUserIds excludes the current user, so the
+                        // displayed count is "everyone else in chat right now".
+                        // Add 1 for self so the count matches user intuition
+                        // ("8 online" includes me when I'm here).
+                        if chatService.presenceUserIds.count > 0 {
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 6, height: 6)
+                                Text("\(chatService.presenceUserIds.count + 1) online")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(.appTextSecondary)
+                            }
+                        }
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 16) {
                         if authService.isAdmin {

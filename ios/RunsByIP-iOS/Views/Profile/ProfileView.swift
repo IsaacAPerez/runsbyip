@@ -5,7 +5,9 @@ import UIKit
 struct ProfileView: View {
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var notificationService: NotificationService
+    @EnvironmentObject var powService: POWService
     @Environment(\.scenePhase) private var scenePhase
+    @State private var powWins: Int = 0
 
     @State private var isEditing = false
     @State private var editName = ""
@@ -193,6 +195,10 @@ struct ProfileView: View {
             }
             .task {
                 notificationsEnabled = await notificationService.authorizationGranted()
+                await refreshPOWWins()
+            }
+            .onChange(of: displayName) { _, _ in
+                Task { await refreshPOWWins() }
             }
             .onChange(of: scenePhase) { _, newPhase in
                 // Re-check after returning from Settings — the 1s post-Settings
@@ -239,10 +245,15 @@ struct ProfileView: View {
             }
 
             VStack(spacing: 8) {
-                Text(displayName)
-                    .font(.title2.bold())
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
+                HStack(spacing: 6) {
+                    Text(displayName)
+                        .font(.title2.bold())
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                    if powWins > 0 {
+                        TrophyBadge(wins: powWins)
+                    }
+                }
 
                 if !email.isEmpty {
                     Text(email)
@@ -261,6 +272,7 @@ struct ProfileView: View {
             }
 
             HStack(spacing: 12) {
+                compactInfoPill(title: "POW wins", value: "\(powWins)")
                 compactInfoPill(title: "Role", value: profile?.role.capitalized ?? "Member")
                 compactInfoPill(title: "Member since", value: memberSince)
             }
@@ -546,6 +558,11 @@ struct ProfileView: View {
               UIApplication.shared.canOpenURL(url) else { return }
 
         UIApplication.shared.open(url)
+    }
+
+    private func refreshPOWWins() async {
+        guard !displayName.isEmpty, displayName != "Player" else { return }
+        powWins = await powService.fetchWinCount(forDisplayName: displayName)
     }
 
     private func iso8601Date(from value: String) -> Date? {

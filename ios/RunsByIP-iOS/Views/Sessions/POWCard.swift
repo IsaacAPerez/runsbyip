@@ -5,6 +5,8 @@ struct POWCard: View {
     @EnvironmentObject var authService: AuthService
 
     @State private var isLoading = true
+    @State private var showCloseConfirmation = false
+    @State private var isClosingPoll = false
 
     var body: some View {
         Group {
@@ -61,6 +63,42 @@ struct POWCard: View {
                 .padding(.vertical, 4)
             }
 
+            if authService.isAdmin {
+                Button {
+                    Haptics.warning()
+                    showCloseConfirmation = true
+                } label: {
+                    HStack(spacing: 6) {
+                        if isClosingPoll {
+                            ProgressView().tint(.appError).scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "stop.circle.fill")
+                        }
+                        Text("Close voting now")
+                            .font(.caption.bold())
+                    }
+                    .foregroundColor(.appError)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.appError.opacity(0.12), in: Capsule())
+                    .overlay(Capsule().stroke(Color.appError.opacity(0.4), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .disabled(isClosingPoll)
+                .confirmationDialog(
+                    "Close POW voting now?",
+                    isPresented: $showCloseConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Close & announce winner", role: .destructive) {
+                        Task { await closeNow(pollId: poll.id) }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("The current leader becomes Player of the Week. A push notification + chat announcement will fire.")
+                }
+            }
+
             // Horizontal scrollable player chips
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
@@ -99,6 +137,19 @@ struct POWCard: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(Color.appBorder, lineWidth: 1)
         )
+    }
+
+    // MARK: - Admin: close poll early
+
+    private func closeNow(pollId: String) async {
+        isClosingPoll = true
+        defer { isClosingPoll = false }
+        do {
+            try await powService.adminClosePoll(pollId)
+            Haptics.success()
+        } catch {
+            Haptics.error()
+        }
     }
 
     // MARK: - Vote (stored locally + server)

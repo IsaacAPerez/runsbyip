@@ -2,6 +2,7 @@ import SwiftUI
 
 struct UserPublicProfileView: View {
     @EnvironmentObject var chatService: ChatService
+    @EnvironmentObject var powService: POWService
     @Environment(\.dismiss) var dismiss
 
     let userId: String
@@ -10,6 +11,7 @@ struct UserPublicProfileView: View {
 
     @State private var profile: UserProfile?
     @State private var isLoading = true
+    @State private var powWins: Int = 0
 
     var body: some View {
         NavigationStack {
@@ -31,9 +33,14 @@ struct UserPublicProfileView: View {
 
                             // Name + Bio
                             VStack(spacing: 8) {
-                                Text(profile?.displayName ?? displayName)
-                                    .font(.title2.bold())
-                                    .foregroundColor(.white)
+                                HStack(spacing: 6) {
+                                    Text(profile?.displayName ?? displayName)
+                                        .font(.title2.bold())
+                                        .foregroundColor(.white)
+                                    if powWins > 0 {
+                                        TrophyBadge(wins: powWins)
+                                    }
+                                }
 
                                 if let bio = profile?.bio, !bio.isEmpty {
                                     Text(bio)
@@ -50,6 +57,10 @@ struct UserPublicProfileView: View {
 
                             // Stats row
                             HStack(spacing: 0) {
+                                StatPill(label: "POW wins", value: "\(powWins)")
+                                Divider()
+                                    .frame(height: 32)
+                                    .background(Color.appBorder)
                                 StatPill(label: "Role", value: profile?.role.capitalized ?? "Member")
                                 Divider()
                                     .frame(height: 32)
@@ -97,7 +108,33 @@ struct UserPublicProfileView: View {
             // Fall back to what we already know
             profile = UserProfile(id: userId, email: nil, displayName: displayName, bio: nil, avatarUrl: avatarUrl, role: "member", createdAt: nil)
         }
+        let nameForWins = profile?.displayName ?? displayName
+        if !nameForWins.isEmpty {
+            powWins = await powService.fetchWinCount(forDisplayName: nameForWins)
+        }
         isLoading = false
+    }
+}
+
+// MARK: - Trophy badge (POW wins)
+
+struct TrophyBadge: View {
+    let wins: Int
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text("🏆")
+                .font(.system(size: 13))
+            if wins > 1 {
+                Text("\(wins)")
+                    .font(.system(size: 11, weight: .heavy).width(.condensed))
+                    .foregroundColor(.appAccentOrange)
+            }
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(Color.appAccentOrange.opacity(0.18), in: Capsule())
+        .overlay(Capsule().stroke(Color.appAccentOrange.opacity(0.45), lineWidth: 1))
     }
 }
 

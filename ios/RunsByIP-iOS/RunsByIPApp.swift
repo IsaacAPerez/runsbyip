@@ -134,6 +134,7 @@ struct MainTabView: View {
     @EnvironmentObject var authService: AuthService
     @EnvironmentObject var appConfig: AppConfigService
     @EnvironmentObject var chatService: ChatService
+    @EnvironmentObject var powService: POWService
     @Environment(\.scenePhase) private var scenePhase
 
     private var isAdmin: Bool {
@@ -187,27 +188,55 @@ struct MainTabView: View {
         .tint(Color.appAccentOrange)
         .preferredColorScheme(.dark)
         .overlay(alignment: .top) {
-            // In-app message banner — only when the user isn't already on
-            // chat. Auto-dismisses after a short window; tap jumps to chat.
-            if let incoming = chatService.incomingMessageNotification,
-               navigationCoordinator.selectedTab != .chat {
-                InAppMessageBanner(
-                    message: incoming,
-                    avatarUrl: chatService.effectiveAvatarURL(
-                        for: incoming,
-                        currentUserId: nil,
-                        currentUserProfileAvatar: nil
-                    ),
-                    onTap: {
-                        navigationCoordinator.selectedTab = .chat
-                        chatService.incomingMessageNotification = nil
-                    },
-                    onDismiss: {
-                        chatService.incomingMessageNotification = nil
-                    }
-                )
-                .padding(.top, 4)
-                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: incoming.id)
+            VStack(spacing: 6) {
+                // POW winner takes priority — biggest moment, always shows.
+                if let win = powService.winnerAnnouncement {
+                    POWWinnerBanner(
+                        winnerName: win.winnerName ?? "",
+                        voteCount: win.winnerVotes ?? 0,
+                        isCurrentUser: (authService.currentProfile?.displayName ?? "") == (win.winnerName ?? ""),
+                        onDismiss: { powService.winnerAnnouncement = nil }
+                    )
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: win.id)
+                }
+
+                // In-app message banner — only when the user isn't already on
+                // chat. Auto-dismisses after a short window; tap jumps to chat.
+                if let incoming = chatService.incomingMessageNotification,
+                   navigationCoordinator.selectedTab != .chat {
+                    InAppMessageBanner(
+                        message: incoming,
+                        avatarUrl: chatService.effectiveAvatarURL(
+                            for: incoming,
+                            currentUserId: nil,
+                            currentUserProfileAvatar: nil
+                        ),
+                        onTap: {
+                            navigationCoordinator.selectedTab = .chat
+                            chatService.incomingMessageNotification = nil
+                        },
+                        onDismiss: {
+                            chatService.incomingMessageNotification = nil
+                        }
+                    )
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: incoming.id)
+                }
+            }
+            .padding(.top, 4)
+        }
+        .onChange(of: powService.winnerAnnouncement?.id) { _, newId in
+            guard newId != nil else { return }
+            // Auto-dismiss the celebration after 8 seconds — long enough
+            // to read + sparkle, short enough not to overstay welcome.
+            let isMe = (authService.currentProfile?.displayName ?? "")
+                == (powService.winnerAnnouncement?.winnerName ?? "")
+            if isMe { Haptics.success() }
+            Task { @MainActor in
+                let dismissedId = newId
+                try? await Task.sleep(for: .seconds(8))
+                if powService.winnerAnnouncement?.id == dismissedId {
+                    powService.winnerAnnouncement = nil
+                }
             }
         }
         .onChange(of: chatService.incomingMessageNotification?.id) { _, newId in
@@ -232,6 +261,7 @@ struct MainTabView: View {
             // disk cache + outbound queue rebind on next sign-in.
             if authService.currentUser == nil {
                 await chatService.shutdown()
+                await powService.unsubscribeFromPollUpdates()
                 return
             }
 
@@ -244,6 +274,10 @@ struct MainTabView: View {
             // We do this here rather than from ChatView so channels stay
             // alive across tab switches and typing presence remains active.
             await chatService.bootstrap()
+
+            // Subscribe to POW poll updates so the winner celebration
+            // banner can fire the moment a poll closes.
+            await powService.subscribeToPollUpdates()
 
             // Fetch admin-tunable config (iOS RSVP discount, chat lock)
             // once the user is signed in — RLS on app_settings requires an
