@@ -58,35 +58,8 @@ struct AdminGalleryView: View {
                         } else {
                             LazyVGrid(columns: columns, spacing: 8) {
                                 ForEach(photos) { photo in
-                                    ZStack(alignment: .topTrailing) {
-                                        AsyncImage(url: photo.url) { phase in
-                                            if let image = phase.image {
-                                                image
-                                                    .resizable()
-                                                    .scaledToFill()
-                                            } else if phase.error != nil {
-                                                Color.appSurfaceElevated
-                                                    .overlay(
-                                                        Image(systemName: "exclamationmark.triangle")
-                                                            .foregroundColor(.appTextTertiary)
-                                                    )
-                                            } else {
-                                                Color.appSurface
-                                                    .overlay(ProgressView().tint(.appTextSecondary))
-                                            }
-                                        }
-                                        .frame(minHeight: 110)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                                        Button {
-                                            deletePhoto(photo)
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .font(.system(size: 22))
-                                                .foregroundColor(.white)
-                                                .shadow(color: .black.opacity(0.6), radius: 3)
-                                        }
-                                        .padding(6)
+                                    GalleryTile(photo: photo) {
+                                        deletePhoto(photo)
                                     }
                                 }
                             }
@@ -169,4 +142,57 @@ struct AdminGalleryView: View {
 struct GalleryPhoto: Identifiable {
     let id = UUID()
     let url: URL
+}
+
+/// Square thumbnail with overlaid delete control. Constraining each tile to
+/// 1:1 prevents `scaledToFill()` from overflowing the grid cell and stacking
+/// onto the next row's tile (which was hiding the x button for that row).
+private struct GalleryTile: View {
+    let photo: GalleryPhoto
+    let onDelete: () -> Void
+
+    @State private var isConfirmingDelete = false
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.appSurface
+
+            AsyncImage(url: photo.url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                case .failure:
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundColor(.appTextTertiary)
+                case .empty:
+                    ProgressView().tint(.appTextSecondary)
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+
+            Button {
+                isConfirmingDelete = true
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 26, height: 26)
+                    .background(Color.black.opacity(0.65), in: Circle())
+                    .overlay(Circle().stroke(Color.white.opacity(0.4), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .padding(6)
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .confirmationDialog("Remove this photo?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive, action: onDelete)
+            Button("Cancel", role: .cancel) {}
+        }
+    }
 }

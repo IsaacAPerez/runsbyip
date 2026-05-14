@@ -137,10 +137,19 @@ struct HomeView: View {
     private func loadData() async {
         if !hasLoadedOnce { isLoading = true }
         errorMessage = nil
+        // Run independent round-trips concurrently — session, poll, and
+        // gallery don't depend on each other, so sequencing them just made
+        // the home-tab paint wait for the slowest one.
+        async let sessionTask: Void = sessionService.fetchCurrentSession()
+        async let pollTask: Void = powService.fetchCurrentPoll()
+        async let galleryTask: [URL] = (try? await chatService.fetchGalleryPhotos()) ?? []
+
+        let gallery = await galleryTask
+        galleryURLs = gallery
+
         do {
-            try await sessionService.fetchCurrentSession()
-            try await powService.fetchCurrentPoll()
-            galleryURLs = (try? await chatService.fetchGalleryPhotos()) ?? []
+            _ = try await sessionTask
+            _ = try await pollTask
             if currentSession == nil {
                 leaderboard = try await sessionService.fetchLeaderboard()
             }

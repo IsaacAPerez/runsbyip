@@ -9,7 +9,7 @@ struct HeroGalleryView: View {
             Color.appBackground
 
             if !urls.isEmpty {
-                ScrollingStripView(urls: urls, speed: 30)
+                ScrollingStripView(urls: urls, speed: 60)
             }
 
             // Gradient overlay
@@ -50,6 +50,18 @@ struct HeroGalleryView: View {
 
 // MARK: - UIKit-backed scrolling strip (no SwiftUI state churn)
 
+/// Cross-instance image cache so tabbing to Home → away → back doesn't
+/// re-download the hero strip on every visit. Gallery photos in storage
+/// are immutable per URL, so once decoded we keep them for the app session.
+private final class HeroImageCache: @unchecked Sendable {
+    static let shared = HeroImageCache()
+    private let cache = NSCache<NSURL, UIImage>()
+    private init() { cache.countLimit = 60 }
+
+    func image(for url: URL) -> UIImage? { cache.object(forKey: url as NSURL) }
+    func store(_ image: UIImage, for url: URL) { cache.setObject(image, forKey: url as NSURL) }
+}
+
 private struct ScrollingStripView: UIViewRepresentable {
     let urls: [URL]
     let speed: CGFloat
@@ -63,7 +75,6 @@ private struct ScrollingStripView: UIViewRepresentable {
         strip.tag = 100
         container.addSubview(strip)
 
-        // Load images asynchronously
         Task { @MainActor in
             var imageViews: [UIImageView] = []
 
@@ -75,11 +86,17 @@ private struct ScrollingStripView: UIViewRepresentable {
                 strip.addSubview(iv)
                 imageViews.append(iv)
 
-                // Load image
-                Task {
-                    if let (data, _) = try? await URLSession.shared.data(from: url),
-                       let image = UIImage(data: data) {
-                        iv.image = image
+                if let cached = HeroImageCache.shared.image(for: url) {
+                    iv.image = cached
+                } else {
+                    Task {
+                        var request = URLRequest(url: url)
+                        request.cachePolicy = .returnCacheDataElseLoad
+                        if let (data, _) = try? await URLSession.shared.data(for: request),
+                           let image = UIImage(data: data) {
+                            HeroImageCache.shared.store(image, for: url)
+                            iv.image = image
+                        }
                     }
                 }
             }
