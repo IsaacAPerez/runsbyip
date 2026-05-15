@@ -373,7 +373,10 @@ struct ChatView: View {
                     .background(Color.appBackground)
                 }
             }
-            .condensedNavTitle("Chat")
+            // Note: we don't use the shared .condensedNavTitle modifier
+            // here because it claims the principal toolbar slot for a
+            // plain title — and we want a title + live online count.
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 1) {
@@ -381,10 +384,11 @@ struct ChatView: View {
                             .font(.system(size: 17, weight: .semibold).width(.condensed))
                             .foregroundColor(.white)
                         // presenceUserIds excludes the current user, so the
-                        // displayed count is "everyone else in chat right now".
-                        // Add 1 for self so the count matches user intuition
-                        // ("8 online" includes me when I'm here).
-                        if chatService.presenceUserIds.count > 0 {
+                        // displayed count is "everyone else in chat right now"
+                        // + 1 for self. Always render once chat has loaded so
+                        // the user can confirm presence is live even when
+                        // they're alone in the room ("1 online" = you).
+                        if chatService.hasLoadedInitial {
                             HStack(spacing: 5) {
                                 Circle()
                                     .fill(Color.green)
