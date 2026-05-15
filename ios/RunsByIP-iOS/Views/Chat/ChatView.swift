@@ -58,6 +58,16 @@ struct ChatView: View {
         !ChatWriteGateConfig.isEnabled || chatWriteGate.isUnlocked
     }
 
+    /// "1 online (you)" when nobody else is in chat, "N online" when
+    /// others are. Always includes self in the count.
+    private var onlineLabel: String {
+        let others = chatService.presenceUserIds.count
+        if others == 0 {
+            return "1 online (you)"
+        }
+        return "\(others + 1) online"
+    }
+
     private var typingIndicatorText: String? {
         let names = chatService.typingUsers.map(\.displayName)
         guard !names.isEmpty else { return nil }
@@ -393,7 +403,7 @@ struct ChatView: View {
                                 Circle()
                                     .fill(Color.green)
                                     .frame(width: 6, height: 6)
-                                Text("\(chatService.presenceUserIds.count + 1) online")
+                                Text(onlineLabel)
                                     .font(.system(size: 10, weight: .semibold))
                                     .foregroundColor(.appTextSecondary)
                             }
