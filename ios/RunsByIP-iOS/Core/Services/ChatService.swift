@@ -819,12 +819,19 @@ final class ChatService: ObservableObject {
         presenceHeartbeatTask?.cancel()
         presenceHeartbeatTask = Task { [weak self] in
             // First touch right away so other clients see us immediately,
-            // then every 25s while bootstrapped.
+            // then every 25s while bootstrapped. Pair every touch with a
+            // snapshot refetch — that way the heartbeat doubles as a poll
+            // for everyone else's heartbeats, and the indicator self-
+            // corrects without depending on the realtime channel for
+            // every update (the channel is still nice-to-have for
+            // instant updates between heartbeats).
             await self?.touchPresence()
+            await self?.fetchPresenceSnapshot()
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(Self.presenceHeartbeatSeconds))
                 if Task.isCancelled { return }
                 await self?.touchPresence()
+                await self?.fetchPresenceSnapshot()
             }
         }
 
