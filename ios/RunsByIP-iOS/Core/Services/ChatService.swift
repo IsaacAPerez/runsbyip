@@ -103,6 +103,12 @@ final class ChatService: ObservableObject {
             await shutdown()
         }
 
+        // Stash the current user id up-front so any async paths that
+        // read bootstrappedUserId during setup (e.g., the presence
+        // recompute filtering out self) get the correct value instead
+        // of nil.
+        bootstrappedUserId = uid
+
         let cache = ChatDiskCache(userScope: uid)
         diskCache = cache
         let client = supabase
@@ -853,21 +859,21 @@ final class ChatService: ObservableObject {
     }
 
     private func fetchPresenceSnapshot() async {
-        let cutoffDate = Date().addingTimeInterval(-Self.presenceFreshnessSeconds * 2)
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let cutoffString = iso.string(from: cutoffDate)
+        // No date-filter on the fetch — PostgREST timestamp parsing was
+        // flaky here (silent zero-row result for certain ISO formats),
+        // and the table is tiny (one row per user). The local expiry
+        // sweep drops stale entries every 10s.
         do {
             let rows: [PresenceRow] = try await supabase
                 .from("user_presence")
                 .select()
-                .gt("last_seen_at", value: cutoffString)
                 .execute()
                 .value
             for r in rows { ingestPresence(userIdRaw: r.userId, isoTimestamp: r.lastSeenAt) }
+            sweepStalePresence()
             recomputePresenceUserIds()
         } catch {
-            // best-effort
+            // best-effort; realtime channel will fill in subsequent updates
         }
     }
 
