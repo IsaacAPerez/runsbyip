@@ -15,6 +15,7 @@ struct MessageBubbleView: View {
     var deliveryState: MessageDeliveryState = .sent
     var onRetry: (() -> Void)?
     var onCancelFailed: (() -> Void)?
+    var isAuthorOnline: Bool = false
 
     @State private var showImagePreview = false
 
@@ -41,18 +42,10 @@ struct MessageBubbleView: View {
             if isCurrentUser {
                 Spacer(minLength: 40)
                 bubbleContent(alignment: .trailing)
-                AvatarView(
-                    name: message.displayName,
-                    avatarUrl: resolvedAvatarURL,
-                    size: 32
-                )
+                avatarBlock
             } else {
                 Button(action: { onAvatarTap?() }) {
-                    AvatarView(
-                        name: message.displayName,
-                        avatarUrl: resolvedAvatarURL,
-                        size: 32
-                    )
+                    avatarBlock
                 }
                 .buttonStyle(.plain)
 
@@ -95,6 +88,22 @@ struct MessageBubbleView: View {
                 }
             }
             .statusBarHidden()
+        }
+    }
+
+    private var avatarBlock: some View {
+        AvatarView(
+            name: message.displayName,
+            avatarUrl: resolvedAvatarURL,
+            size: 32
+        )
+        .overlay(alignment: .bottomTrailing) {
+            if isAuthorOnline {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 10, height: 10)
+                    .overlay(Circle().stroke(Color.appBackground, lineWidth: 2))
+            }
         }
     }
 

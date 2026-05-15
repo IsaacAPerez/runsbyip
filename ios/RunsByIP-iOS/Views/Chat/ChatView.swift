@@ -150,7 +150,8 @@ struct ChatView: View {
                                             reactionsAllowed: canUseChatWrites,
                                             deliveryState: chatService.deliveryState(for: message.id),
                                             onRetry: { chatService.retryFailedMessage(id: message.id) },
-                                            onCancelFailed: { chatService.cancelFailedMessage(id: message.id) }
+                                            onCancelFailed: { chatService.cancelFailedMessage(id: message.id) },
+                                            isAuthorOnline: chatService.presenceUserIds.contains(message.userId.lowercased())
                                         )
                                         .id(message.id)
                                         .onAppear {
