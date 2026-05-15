@@ -714,6 +714,10 @@ final class ChatService: ObservableObject {
                 guard let self else { return }
                 if let profile = try? update.decodeRecord(as: UserProfile.self, decoder: jsonDecoder) {
                     self.currentUserMuted = profile.isMuted
+                    // Also rewrite our own historical messages so a
+                    // self-initiated name or pfp change is reflected
+                    // everywhere immediately, not just in new messages.
+                    self.applyProfileUpdate(profile)
                 }
             }
         }
@@ -793,12 +797,7 @@ final class ChatService: ObservableObject {
             for await update in updates {
                 guard let self else { return }
                 guard let profile = try? update.decodeRecord(as: UserProfile.self, decoder: jsonDecoder) else { continue }
-                let uid = profile.id.lowercased()
-                if let url = profile.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty {
-                    if self.avatarURLByUserId[uid] != url {
-                        self.avatarURLByUserId[uid] = url
-                    }
-                }
+                self.applyProfileUpdate(profile)
             }
         }
 
@@ -806,6 +805,45 @@ final class ChatService: ObservableObject {
             try await channel.subscribeWithError()
         } catch {
             print("[ChatService] profiles channel subscribe failed: \(error)")
+        }
+    }
+
+    /// Reflects a profile UPDATE across all loaded chat state: avatar
+    /// cache, every in-memory message authored by this user, and the
+    /// disk snapshot. Without this rewrite, a user changing their name
+    /// or pfp would only see the change on future messages — historical
+    /// bubbles would still render the baked-in fields from fetch time.
+    private func applyProfileUpdate(_ profile: UserProfile) {
+        let uid = profile.id.lowercased()
+
+        let newAvatar = profile.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newName = profile.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let url = newAvatar, !url.isEmpty, avatarURLByUserId[uid] != url {
+            avatarURLByUserId[uid] = url
+        }
+
+        var didMutateMessages = false
+        for idx in messages.indices where messages[idx].userId.lowercased() == uid {
+            let row = messages[idx]
+            let updatedAvatar = (newAvatar?.isEmpty == false) ? newAvatar : row.avatarUrl
+            let updatedName = (newName?.isEmpty == false) ? (newName ?? row.displayName) : row.displayName
+            if updatedAvatar != row.avatarUrl || updatedName != row.displayName {
+                messages[idx] = ChatMessage(
+                    id: row.id,
+                    userId: row.userId,
+                    displayName: updatedName,
+                    content: row.content,
+                    avatarUrl: updatedAvatar,
+                    messageType: row.messageType,
+                    attachmentPath: row.attachmentPath,
+                    createdAt: row.createdAt
+                )
+                didMutateMessages = true
+            }
+        }
+        if didMutateMessages {
+            persistToDisk()
         }
     }
 
