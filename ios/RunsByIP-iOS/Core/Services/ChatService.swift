@@ -39,10 +39,24 @@ final class ChatService: ObservableObject {
     private var typingChannel: RealtimeChannelV2?
     private var ownProfileChannel: RealtimeChannelV2?
     private var profilesChannel: RealtimeChannelV2?
+    private var userPresenceChannel: RealtimeChannelV2?
     private var typingExpiryTask: Task<Void, Never>?
     private var typingExpirations: [String: Date] = [:]
     private var lastTypingEmittedState: Bool?
     private var lastTypingEmittedAt: Date?
+
+    // MARK: - Presence (heartbeat-based)
+
+    /// Heartbeat-based presence. Each client touches user_presence every
+    /// ~25s via the touch_presence RPC. "Online" is last_seen_at within
+    /// the last 60s. More deterministic than Phoenix Presence and
+    /// survives realtime tenant restarts.
+    private var presenceHeartbeatTask: Task<Void, Never>?
+    private var presenceExpiryTask: Task<Void, Never>?
+    private var presenceLastSeenByUserId: [String: Date] = [:]
+    private static let presenceFreshnessSeconds: TimeInterval = 60
+    private static let presenceHeartbeatSeconds: TimeInterval = 25
+    private static let presenceExpirySweepSeconds: TimeInterval = 10
 
     // MARK: - State
 
@@ -173,16 +187,24 @@ final class ChatService: ObservableObject {
         typingExpirations = [:]
         presenceUserIds = []
 
+        presenceHeartbeatTask?.cancel()
+        presenceHeartbeatTask = nil
+        presenceExpiryTask?.cancel()
+        presenceExpiryTask = nil
+        presenceLastSeenByUserId = [:]
+
         await messageChannel?.unsubscribe()
         await reactionChannel?.unsubscribe()
         await typingChannel?.unsubscribe()
         await ownProfileChannel?.unsubscribe()
         await profilesChannel?.unsubscribe()
+        await userPresenceChannel?.unsubscribe()
         messageChannel = nil
         reactionChannel = nil
         typingChannel = nil
         ownProfileChannel = nil
         profilesChannel = nil
+        userPresenceChannel = nil
 
         messages = []
         reactionRecords = []
@@ -776,7 +798,139 @@ final class ChatService: ObservableObject {
         async let t: () = subscribeToTypingPresence()
         async let p: () = subscribeToOwnProfile()
         async let allP: () = subscribeToAllProfileUpdates()
-        _ = await (m, r, t, p, allP)
+        async let pres: () = startPresenceHeartbeat()
+        _ = await (m, r, t, p, allP, pres)
+    }
+
+    // MARK: - Heartbeat presence
+
+    /// Fetches a snapshot, opens a realtime channel on user_presence,
+    /// then starts the heartbeat + expiry timers. Idempotent on shutdown.
+    private func startPresenceHeartbeat() async {
+        await fetchPresenceSnapshot()
+        await subscribeToUserPresenceChannel()
+
+        presenceHeartbeatTask?.cancel()
+        presenceHeartbeatTask = Task { [weak self] in
+            // First touch right away so other clients see us immediately,
+            // then every 25s while bootstrapped.
+            await self?.touchPresence()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Self.presenceHeartbeatSeconds))
+                if Task.isCancelled { return }
+                await self?.touchPresence()
+            }
+        }
+
+        presenceExpiryTask?.cancel()
+        presenceExpiryTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Self.presenceExpirySweepSeconds))
+                if Task.isCancelled { return }
+                await self?.sweepStalePresence()
+            }
+        }
+    }
+
+    private func touchPresence() async {
+        struct Empty: Encodable {}
+        do {
+            try await supabase.rpc("touch_presence", params: Empty()).execute()
+        } catch {
+            // best-effort; next heartbeat will retry
+        }
+    }
+
+    private struct PresenceRow: Decodable {
+        let userId: String
+        let lastSeenAt: String
+        let displayName: String?
+        enum CodingKeys: String, CodingKey {
+            case userId = "user_id"
+            case lastSeenAt = "last_seen_at"
+            case displayName = "display_name"
+        }
+    }
+
+    private func fetchPresenceSnapshot() async {
+        let cutoffDate = Date().addingTimeInterval(-Self.presenceFreshnessSeconds * 2)
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let cutoffString = iso.string(from: cutoffDate)
+        do {
+            let rows: [PresenceRow] = try await supabase
+                .from("user_presence")
+                .select()
+                .gt("last_seen_at", value: cutoffString)
+                .execute()
+                .value
+            for r in rows { ingestPresence(userIdRaw: r.userId, isoTimestamp: r.lastSeenAt) }
+            recomputePresenceUserIds()
+        } catch {
+            // best-effort
+        }
+    }
+
+    private func subscribeToUserPresenceChannel() async {
+        let channel = supabase.realtimeV2.channel("user-presence-room")
+        userPresenceChannel = channel
+
+        let inserts = channel.postgresChange(InsertAction.self, table: "user_presence")
+        let updates = channel.postgresChange(UpdateAction.self, table: "user_presence")
+
+        Task { [weak self] in
+            for await action in inserts {
+                guard let row = try? action.decodeRecord(as: PresenceRow.self, decoder: JSONDecoder()) else { continue }
+                await self?.ingestAndRecompute(row: row)
+            }
+        }
+        Task { [weak self] in
+            for await action in updates {
+                guard let row = try? action.decodeRecord(as: PresenceRow.self, decoder: JSONDecoder()) else { continue }
+                await self?.ingestAndRecompute(row: row)
+            }
+        }
+
+        do {
+            try await channel.subscribeWithError()
+        } catch {
+            print("[ChatService] user_presence channel subscribe failed: \(error)")
+        }
+    }
+
+    private func ingestAndRecompute(row: PresenceRow) async {
+        ingestPresence(userIdRaw: row.userId, isoTimestamp: row.lastSeenAt)
+        recomputePresenceUserIds()
+    }
+
+    private func ingestPresence(userIdRaw: String, isoTimestamp: String) {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let iso2 = ISO8601DateFormatter()
+        iso2.formatOptions = [.withInternetDateTime]
+        let parsed = iso.date(from: isoTimestamp) ?? iso2.date(from: isoTimestamp)
+        guard let parsed else { return }
+        presenceLastSeenByUserId[userIdRaw.lowercased()] = parsed
+    }
+
+    private func sweepStalePresence() {
+        let cutoff = Date().addingTimeInterval(-Self.presenceFreshnessSeconds)
+        let before = presenceLastSeenByUserId.count
+        presenceLastSeenByUserId = presenceLastSeenByUserId.filter { $0.value > cutoff }
+        if presenceLastSeenByUserId.count != before {
+            recomputePresenceUserIds()
+        }
+    }
+
+    /// Recomputes the published presenceUserIds set from the fresh
+    /// last_seen map. Excludes self (the navbar adds +1 for "you").
+    private func recomputePresenceUserIds() {
+        let me = bootstrappedUserId?.lowercased()
+        let fresh = Set(presenceLastSeenByUserId.keys)
+        let withoutMe = me.map { fresh.subtracting([$0]) } ?? fresh
+        if withoutMe != presenceUserIds {
+            presenceUserIds = withoutMe
+        }
     }
 
     /// Listens for any profile UPDATE so avatar changes propagate to the
@@ -1003,17 +1157,14 @@ final class ChatService: ObservableObject {
     private func handlePresenceChange(_ change: any PresenceAction) async {
         guard let me = await currentUserId else { return }
 
-        // Apply leaves first. Note: Phoenix presence emits a leave+join
-        // pair when an existing user's state changes (each track() call
-        // creates a new presence ref). For tracking "is this user
-        // online?" the leave removes them but the immediately-following
-        // join re-adds them — net effect is they stay online except on
-        // a true disconnect.
+        // Phoenix presence only drives the *typing* indicator now.
+        // "Online" presence comes from the user_presence heartbeat table,
+        // populated in startPresenceHeartbeat() — much more deterministic
+        // than Phoenix Presence has been in this project.
         for (_, presence) in change.leaves {
             guard let userId = presence.state["user_id"]?.stringValue else { continue }
             typingExpirations[userId] = nil
             typingUsers.removeAll { $0.id == userId }
-            presenceUserIds.remove(userId.lowercased())
         }
 
         for (_, presence) in change.joins {
@@ -1021,8 +1172,6 @@ final class ChatService: ObservableObject {
                   userId.lowercased() != me else { continue }
             let displayName = presence.state["display_name"]?.stringValue ?? "Anonymous"
             let isTyping = presence.state["typing"]?.boolValue ?? false
-
-            presenceUserIds.insert(userId.lowercased())
 
             if isTyping {
                 // 8s expiry: presence still cleans up on disconnect, but
