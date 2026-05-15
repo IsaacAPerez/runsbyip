@@ -54,9 +54,9 @@ final class ChatService: ObservableObject {
     private var presenceHeartbeatTask: Task<Void, Never>?
     private var presenceExpiryTask: Task<Void, Never>?
     private var presenceLastSeenByUserId: [String: Date] = [:]
-    private static let presenceFreshnessSeconds: TimeInterval = 60
-    private static let presenceHeartbeatSeconds: TimeInterval = 25
-    private static let presenceExpirySweepSeconds: TimeInterval = 10
+    private static let presenceFreshnessSeconds: TimeInterval = 35
+    private static let presenceHeartbeatSeconds: TimeInterval = 15
+    private static let presenceExpirySweepSeconds: TimeInterval = 5
 
     // MARK: - State
 
