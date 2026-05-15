@@ -203,7 +203,15 @@ final class AuthService: ObservableObject {
                 .from("avatars")
                 .getPublicURL(path: path)
 
-            let urlString = publicURL.absoluteString
+            // Cache-buster query param: storage path is always
+            // <uid>/avatar.jpg, so without this the URL stored in
+            // profiles is byte-identical to the previous one and every
+            // cache layer (in-memory ChatImageCache, URLSession's
+            // URLCache, even SDWebImage if it ever lands) keeps serving
+            // the old image. Appending a fresh timestamp gives the new
+            // upload a distinct cache key while still pointing at the
+            // same underlying file.
+            let urlString = "\(publicURL.absoluteString)?v=\(Int(Date().timeIntervalSince1970))"
 
             let updated: UserProfile = try await supabase
                 .from("profiles")
