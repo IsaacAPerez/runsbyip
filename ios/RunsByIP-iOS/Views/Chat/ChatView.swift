@@ -265,7 +265,7 @@ struct ChatView: View {
                         // realtime typing broadcasts land.
                         if let typingIndicatorText {
                             HStack(spacing: 8) {
-                                TypingDotsView()
+                                TypingAvatarsView(users: chatService.typingUsers)
                                 Text(typingIndicatorText)
                                     .font(.caption)
                                     .foregroundColor(.appTextSecondary)
@@ -831,22 +831,41 @@ private struct NewMessagesPill: View {
     }
 }
 
-private struct TypingDotsView: View {
+/// Instagram-style typing cue: the typists' avatars in an overlapping
+/// pile, each gently bobbing. Caps at 3 faces with a "+N" overflow so the
+/// row never grows at game-night scale.
+private struct TypingAvatarsView: View {
+    let users: [ChatTypingUser]
     @State private var animate = false
 
+    private let size: CGFloat = 22
+    private var shown: [ChatTypingUser] { Array(users.prefix(3)) }
+    private var overflow: Int { max(0, users.count - 3) }
+
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<3, id: \.self) { index in
-                Circle()
-                    .fill(Color.appAccentOrange.opacity(0.85))
-                    .frame(width: 6, height: 6)
-                    .offset(y: animate ? -2 : 2)
+        HStack(spacing: -size * 0.4) {
+            ForEach(Array(shown.enumerated()), id: \.element.id) { index, user in
+                AvatarView(name: user.displayName, avatarUrl: user.avatarUrl, size: size)
+                    .overlay(Circle().stroke(Color.appBackground, lineWidth: 1.5))
+                    .offset(y: animate ? -2.5 : 2.5)
                     .animation(
-                        .easeInOut(duration: 0.45)
+                        .easeInOut(duration: 0.5)
                         .repeatForever()
-                        .delay(Double(index) * 0.12),
+                        .delay(Double(index) * 0.15),
                         value: animate
                     )
+                    .zIndex(Double(shown.count - index))
+            }
+
+            if overflow > 0 {
+                ZStack {
+                    Circle().fill(Color.appAccentOrange.opacity(0.2))
+                    Text("+\(overflow)")
+                        .font(.system(size: size * 0.34, weight: .bold))
+                        .foregroundColor(.appAccentOrange)
+                }
+                .frame(width: size, height: size)
+                .overlay(Circle().stroke(Color.appBackground, lineWidth: 1.5))
             }
         }
         .onAppear { animate = true }

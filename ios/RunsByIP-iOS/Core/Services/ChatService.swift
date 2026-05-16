@@ -42,8 +42,10 @@ final class ChatService: ObservableObject {
     private var userPresenceChannel: RealtimeChannelV2?
     private var typingExpiryTask: Task<Void, Never>?
     private var typingExpirations: [String: Date] = [:]
-    private var lastTypingEmittedState: Bool?
-    private var lastTypingEmittedAt: Date?
+    private var typingBroadcast: RealtimeSubscription?
+    private var typingKeepaliveTask: Task<Void, Never>?
+    private var isLocallyTyping = false
+    private var typingChannelReady = false
 
     // MARK: - Presence (heartbeat-based)
 
@@ -189,6 +191,12 @@ final class ChatService: ObservableObject {
     func shutdown() async {
         typingExpiryTask?.cancel()
         typingExpiryTask = nil
+        typingKeepaliveTask?.cancel()
+        typingKeepaliveTask = nil
+        typingBroadcast?.cancel()
+        typingBroadcast = nil
+        isLocallyTyping = false
+        typingChannelReady = false
         typingUsers = []
         typingExpirations = [:]
         presenceUserIds = []
@@ -669,32 +677,45 @@ final class ChatService: ObservableObject {
 
     // MARK: - Typing (presence + broadcast belt-and-suspenders)
 
+    /// Typing is signalled over Realtime *broadcast*, re-emitted every 2s
+    /// while typing so a late subscriber catches up within one interval.
+    /// Presence is unusable here: the server appends a meta per track and
+    /// supabase-swift only decodes metas.first, so receivers stayed pinned
+    /// to the stale baseline and the indicator never fired between devices.
     func setTyping(isTyping: Bool) {
-        // Throttle while the state is unchanged so a long keystroke run
-        // doesn't push the channel — but always emit immediately when the
-        // boolean flips so transitions land without delay.
-        let now = Date()
-        let stateChanged = lastTypingEmittedState != isTyping
-        if !stateChanged,
-           let last = lastTypingEmittedAt,
-           now.timeIntervalSince(last) < 3.0 {
-            return
+        if isTyping {
+            guard !isLocallyTyping else { return }
+            isLocallyTyping = true
+            typingKeepaliveTask?.cancel()
+            typingKeepaliveTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    await self?.emitTyping(true)
+                    try? await Task.sleep(for: .seconds(2))
+                }
+            }
+        } else {
+            guard isLocallyTyping else { return }
+            isLocallyTyping = false
+            typingKeepaliveTask?.cancel()
+            typingKeepaliveTask = nil
+            Task { [weak self] in await self?.emitTyping(false) }
         }
-        lastTypingEmittedState = isTyping
-        lastTypingEmittedAt = now
+    }
 
-        Task { [weak self] in
-            guard let self else { return }
-            guard let channel = self.typingChannel,
-                  let user = try? await self.currentUser() else { return }
-            let displayName = user.userMetadata["display_name"]?.stringValue ?? "Anonymous"
-            let state: [String: AnyJSON] = [
-                "user_id": .string(user.id.uuidString.lowercased()),
-                "display_name": .string(displayName),
-                "typing": .bool(isTyping),
-            ]
-            await channel.track(state: state)
-        }
+    private func emitTyping(_ isTyping: Bool) async {
+        guard typingChannelReady,
+              let channel = typingChannel,
+              let user = try? await currentUser() else { return }
+        let displayName = user.userMetadata["display_name"]?.stringValue ?? "Anonymous"
+        let avatarUrl = user.userMetadata["avatar_url"]?.stringValue
+            ?? avatarURLByUserId[user.id.uuidString.lowercased()]
+        let payload: [String: AnyJSON] = [
+            "user_id": .string(user.id.uuidString.lowercased()),
+            "display_name": .string(displayName),
+            "avatar_url": avatarUrl.map(AnyJSON.string) ?? .null,
+            "typing": .bool(isTyping),
+        ]
+        await channel.broadcast(event: "typing", message: payload)
     }
 
     // MARK: - Mute
@@ -801,7 +822,7 @@ final class ChatService: ObservableObject {
     private func subscribeAll() async {
         async let m: () = subscribeToMessageInserts()
         async let r: () = subscribeToReactionChanges()
-        async let t: () = subscribeToTypingPresence()
+        async let t: () = subscribeToTyping()
         async let p: () = subscribeToOwnProfile()
         async let allP: () = subscribeToAllProfileUpdates()
         async let pres: () = startPresenceHeartbeat()
@@ -1115,25 +1136,18 @@ final class ChatService: ObservableObject {
         }
     }
 
-    /// Typing indicator via Supabase Presence. Broadcast was unreliable at
-    /// game-night scale (10+ users): events have no replay, so a client
-    /// that joined a moment after someone started typing would never see
-    /// it until the next 2s re-emit. Presence delivers the full current
-    /// state on join, auto-cleans on disconnect, and survives transient
-    /// channel resubscribes — meaningfully more durable for live chat.
-    private func subscribeToTypingPresence() async {
+    /// Typing indicator over Realtime broadcast. Each typist re-emits every
+    /// 2s (see setTyping); receivers hold a 4s expiry that the re-emit
+    /// refreshes, so a missed stop self-heals within one interval and a
+    /// disconnect clears within ~4s (broadcast has no presence auto-clean).
+    private func subscribeToTyping() async {
         let channel = supabase.realtimeV2.channel("chat-typing-room")
         typingChannel = channel
 
-        // IMPORTANT: presence callbacks MUST be registered before subscribe
-        // per supabase-swift's contract. Do not move this below the
-        // subscribeWithError() call.
-        let presenceChanges = channel.presenceChange()
-
-        Task { [weak self] in
-            for await change in presenceChanges {
-                await self?.handlePresenceChange(change)
-            }
+        // Broadcast callbacks MUST be registered before subscribe. The
+        // returned token auto-cancels on deinit, so it has to be retained.
+        typingBroadcast = channel.onBroadcast(event: "typing") { [weak self] message in
+            Task { await self?.handleTypingBroadcast(message) }
         }
 
         do {
@@ -1142,18 +1156,7 @@ final class ChatService: ObservableObject {
             print("[ChatService] typing channel subscribe failed: \(error)")
             return
         }
-
-        // Track our initial presence (typing: false). All other subscribers
-        // will see us in their join diff. setTyping() updates this state.
-        if let user = try? await currentUser() {
-            let displayName = user.userMetadata["display_name"]?.stringValue ?? "Anonymous"
-            let state: [String: AnyJSON] = [
-                "user_id": .string(user.id.uuidString.lowercased()),
-                "display_name": .string(displayName),
-                "typing": .bool(false),
-            ]
-            await channel.track(state: state)
-        }
+        typingChannelReady = true
 
         typingExpiryTask?.cancel()
         typingExpiryTask = Task { [weak self] in
@@ -1164,42 +1167,31 @@ final class ChatService: ObservableObject {
         }
     }
 
-    /// Reconciles `typingUsers` from a presence-diff. Joins with `typing:
-    /// true` are added; joins with `typing: false` clear that user.
-    /// Leaves always clear the user (disconnect = stop typing).
-    private func handlePresenceChange(_ change: any PresenceAction) async {
-        guard let me = await currentUserId else { return }
+    /// Applies an inbound typing broadcast. supabase-swift hands the whole
+    /// envelope to the callback, so the sender's fields live under
+    /// `message["payload"]`. `typing: true` (re)adds the sender with a
+    /// refreshed 4s expiry; `typing: false` clears them immediately.
+    private func handleTypingBroadcast(_ message: [String: AnyJSON]) async {
+        guard let body = message["payload"]?.objectValue,
+              let me = await currentUserId,
+              let userId = body["user_id"]?.stringValue,
+              userId.lowercased() != me else { return }
+        let displayName = body["display_name"]?.stringValue ?? "Anonymous"
+        let avatarUrl = body["avatar_url"]?.stringValue
+            ?? avatarURLByUserId[userId.lowercased()]
+        let isTyping = body["typing"]?.boolValue ?? false
 
-        // Phoenix presence only drives the *typing* indicator now.
-        // "Online" presence comes from the user_presence heartbeat table,
-        // populated in startPresenceHeartbeat() — much more deterministic
-        // than Phoenix Presence has been in this project.
-        for (_, presence) in change.leaves {
-            guard let userId = presence.state["user_id"]?.stringValue else { continue }
+        if isTyping {
+            typingExpirations[userId] = Date().addingTimeInterval(4)
+            let entry = ChatTypingUser(id: userId, displayName: displayName, avatarUrl: avatarUrl)
+            if let index = typingUsers.firstIndex(where: { $0.id == userId }) {
+                typingUsers[index] = entry
+            } else {
+                typingUsers.append(entry)
+            }
+        } else {
             typingExpirations[userId] = nil
             typingUsers.removeAll { $0.id == userId }
-        }
-
-        for (_, presence) in change.joins {
-            guard let userId = presence.state["user_id"]?.stringValue,
-                  userId.lowercased() != me else { continue }
-            let displayName = presence.state["display_name"]?.stringValue ?? "Anonymous"
-            let isTyping = presence.state["typing"]?.boolValue ?? false
-
-            if isTyping {
-                // 8s expiry: presence still cleans up on disconnect, but
-                // we belt-and-suspenders the visible state in case a
-                // "typing: false" join is dropped between subscribers.
-                typingExpirations[userId] = Date().addingTimeInterval(8)
-                if let index = typingUsers.firstIndex(where: { $0.id == userId }) {
-                    typingUsers[index] = ChatTypingUser(id: userId, displayName: displayName)
-                } else {
-                    typingUsers.append(ChatTypingUser(id: userId, displayName: displayName))
-                }
-            } else {
-                typingExpirations[userId] = nil
-                typingUsers.removeAll { $0.id == userId }
-            }
         }
     }
 

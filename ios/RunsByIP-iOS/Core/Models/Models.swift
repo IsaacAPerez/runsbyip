@@ -208,6 +208,7 @@ struct MessageReaction: Identifiable, Equatable {
 struct ChatTypingUser: Identifiable, Equatable {
     let id: String
     let displayName: String
+    let avatarUrl: String?
 }
 
 // MARK: - UserProfile
