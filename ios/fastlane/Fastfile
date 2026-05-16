@@ -95,6 +95,46 @@ class AscClient
     { id: v["id"], state: v["attributes"]["appStoreState"], build_id: build_id }
   end
 
+  # Find ANY existing editable/open App Store version regardless of its
+  # versionString. ASC permits only one non-released version at a time,
+  # so a leftover version (e.g. a prior string still in
+  # PREPARE_FOR_SUBMISSION after a rejected or aborted release) blocks
+  # creating a new one. Returns { id:, state:, version_string:, build_id: }
+  # or nil.
+  def find_open_version(app_id:, platform: "IOS")
+    code, body = request(
+      :get,
+      "/v1/apps/#{app_id}/appStoreVersions" \
+      "?filter[platform]=#{platform}&include=build&limit=20"
+    )
+    return nil unless code == 200
+    data = JSON.parse(body)
+    v = (data["data"] || []).find do |ver|
+      TRAIN_OPEN_STATES.include?(ver.dig("attributes", "appStoreState").to_s)
+    end
+    return nil unless v
+    {
+      id: v["id"],
+      state: v.dig("attributes", "appStoreState"),
+      version_string: v.dig("attributes", "versionString"),
+      build_id: v.dig("relationships", "build", "data", "id")
+    }
+  end
+
+  # Rename an existing editable App Store version to a new marketing
+  # version string, so a stuck version can be adopted instead of
+  # creating a fresh one.
+  def update_version_string(version_id:, version_string:)
+    code, body = request(:patch, "/v1/appStoreVersions/#{version_id}", {
+      data: {
+        type: "appStoreVersions",
+        id: version_id,
+        attributes: { versionString: version_string }
+      }
+    })
+    raise "Failed to set versionString #{version_string} on #{version_id} (#{code}): #{body}" unless code == 200
+  end
+
   # Create an editable appStoreVersion for the given marketing version.
   def create_app_store_version(app_id:, version_string:, platform: "IOS", release_type: "MANUAL")
     code, body = request(:post, "/v1/appStoreVersions", {
@@ -316,9 +356,25 @@ platform :ios do
 
     info = client.fetch_editable_version(app_id: ASC_APP_ID, version_string: version)
     if info.nil?
-      UI.message("No App Store version for #{version} — creating draft (releaseType=MANUAL)…")
-      version_id = client.create_app_store_version(app_id: ASC_APP_ID, version_string: version)
-      info = { id: version_id, state: "PREPARE_FOR_SUBMISSION", build_id: nil }
+      # ASC permits only one non-released version. A leftover open
+      # version (e.g. a prior string still in PREPARE_FOR_SUBMISSION
+      # after a rejected/aborted release) makes create return 409
+      # "cannot create a new version in the current state". Adopt and
+      # rename that version instead of blindly creating a new one.
+      open = client.find_open_version(app_id: ASC_APP_ID)
+      if open
+        if open[:version_string] != version
+          UI.message("Adopting stuck App Store version #{open[:version_string]} (#{open[:state]}) → renaming to #{version}…")
+          client.update_version_string(version_id: open[:id], version_string: version)
+        else
+          UI.message("Reusing existing App Store version #{version} (#{open[:state]})…")
+        end
+        info = { id: open[:id], state: open[:state], build_id: open[:build_id] }
+      else
+        UI.message("No App Store version for #{version} — creating draft (releaseType=MANUAL)…")
+        version_id = client.create_app_store_version(app_id: ASC_APP_ID, version_string: version)
+        info = { id: version_id, state: "PREPARE_FOR_SUBMISSION", build_id: nil }
+      end
     end
     if info[:build_id].nil?
       build_id = client.latest_valid_build(app_id: ASC_APP_ID, version_string: version)
